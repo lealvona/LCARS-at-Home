@@ -1,0 +1,99 @@
+# LCARS Computer - Entity Customization
+# 
+# This file allows you to set friendly names, icons, and other attributes
+# for your entities. These names are what the LLM will see when processing
+# commands, so use clear, descriptive names.
+#
+# Format:
+#   entity_id:
+#     friendly_name: "Human Readable Name"
+#     icon: mdi:icon-name
+#
+# Reference: https://www.home-assistant.io/docs/configuration/customizing-devices/
+
+# ==========================================================================
+# EXAMPLE CUSTOMIZATIONS
+# ==========================================================================
+# Uncomment and modify these examples for your setup
+
+# Lighting
+# light.living_room_main:
+#   friendly_name: "Main Viewscreen Illumination"
+#   icon: mdi:television-ambient-light
+
+# light.kitchen_overhead:
+#   friendly_name: "Galley Lighting"
+#   icon: mdi:ceiling-light
+
+# light.bedroom_nightstand:
+#   friendly_name: "Quarters Ambient Light"
+#   icon: mdi:lamp
+
+# Locks
+# lock.front_door:
+#   friendly_name: "Main Airlock"
+#   icon: mdi:door-closed-lock
+
+# lock.garage_door:
+#   friendly_name: "Shuttlebay Access"
+#   icon: mdi:garage-lock
+
+# Climate
+# climate.living_room:
+#   friendly_name: "Environmental Controls - Main Deck"
+#   icon: mdi:thermostat
+
+# climate.bedroom:
+#   friendly_name: "Environmental Controls - Crew Quarters"
+#   icon: mdi:thermostat
+
+# Sensors
+# sensor.living_room_temperature:
+#   friendly_name: "Main Deck Temperature"
+#   icon: mdi:thermometer
+
+# sensor.outdoor_temperature:
+#   friendly_name: "External Hull Temperature"
+#   icon: mdi:thermometer-alert
+
+# binary_sensor.front_door:
+#   friendly_name: "Main Airlock Sensor"
+#   icon: mdi:door-sensor
+
+# binary_sensor.motion_living_room:
+#   friendly_name: "Motion Sensor - Bridge"
+#   icon: mdi:motion-sensor
+
+# Media Players
+# media_player.living_room_tv:
+#   friendly_name: "Main Viewscreen"
+#   icon: mdi:television
+
+# media_player.bedroom_speaker:
+#   friendly_name: "Quarters Audio System"
+#   icon: mdi:speaker
+
+# People
+# person.user_1:
+#   friendly_name: "Commander"
+#   icon: mdi:account-star
+
+# person.user_2:
+#   friendly_name: "Lieutenant"
+#   icon: mdi:account
+
+# ==========================================================================
+# INPUT BOOLEANS (System States)
+# ==========================================================================
+
+input_boolean.red_alert:
+  friendly_name: "Red Alert Status"
+  icon: mdi:alarm-light
+
+input_boolean.do_not_disturb:
+  friendly_name: "Do Not Disturb Protocol"
+  icon: mdi:bell-off
+
+input_boolean.away_mode:
+  friendly_name: "Away Mission Mode"
+  icon: mdi:rocket-launch

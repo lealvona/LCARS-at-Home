@@ -1,0 +1,478 @@
+# LCARS Computer - Home Assistant Scripts
+#
+# These scripts serve as "tools" that the LLM can call to interact with
+# the physical environment. Each script is designed to be self-contained
+# and provides feedback suitable for voice response.
+#
+# The Extended OpenAI Conversation integration exposes these scripts
+# as callable functions to the language model.
+
+# ==========================================================================
+# LIGHTING CONTROL SCRIPTS
+# ==========================================================================
+
+# Generic light control script that handles any light entity.
+# The LLM calls this with the entity_id and desired state.
+control_light:
+  alias: "Control Light"
+  description: "Turn a light on or off, or set brightness and color"
+  fields:
+    entity_id:
+      description: "The light entity to control"
+      required: true
+      example: "light.living_room"
+      selector:
+        entity:
+          domain: light
+    action:
+      description: "The action to perform: on, off, or toggle"
+      required: true
+      example: "on"
+      selector:
+        select:
+          options:
+            - "on"
+            - "off"
+            - "toggle"
+    brightness_pct:
+      description: "Brightness percentage (0-100)"
+      required: false
+      example: 75
+      selector:
+        number:
+          min: 0
+          max: 100
+    color_name:
+      description: "Color name (red, blue, green, warm_white, etc.)"
+      required: false
+      example: "warm_white"
+      selector:
+        text:
+  sequence:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ action == 'on' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: "{{ entity_id }}"
+              data:
+                brightness_pct: "{{ brightness_pct | default(100) }}"
+                color_name: "{{ color_name | default(omit) }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ action == 'off' }}"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id: "{{ entity_id }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ action == 'toggle' }}"
+          sequence:
+            - service: light.toggle
+              target:
+                entity_id: "{{ entity_id }}"
+
+# Set all lights in a room to a specific scene.
+# Useful for commands like "Make the living room cozy".
+set_room_ambiance:
+  alias: "Set Room Ambiance"
+  description: "Set the lighting mood for an entire room"
+  fields:
+    room:
+      description: "The room to adjust (living_room, bedroom, kitchen, etc.)"
+      required: true
+      selector:
+        text:
+    mood:
+      description: "The desired mood (bright, dim, cozy, movie, night, off)"
+      required: true
+      selector:
+        select:
+          options:
+            - "bright"
+            - "dim"
+            - "cozy"
+            - "movie"
+            - "night"
+            - "off"
+  sequence:
+    - service: scene.turn_on
+      target:
+        entity_id: "scene.{{ room }}_{{ mood }}"
+
+# ==========================================================================
+# CLIMATE CONTROL SCRIPTS
+# ==========================================================================
+
+# Adjust thermostat temperature.
+# Handles relative changes ("warmer", "cooler") and absolute values.
+adjust_temperature:
+  alias: "Adjust Temperature"
+  description: "Adjust the thermostat temperature"
+  fields:
+    entity_id:
+      description: "The climate entity to control"
+      required: true
+      selector:
+        entity:
+          domain: climate
+    adjustment:
+      description: "How to adjust: 'set' for absolute, 'increase' or 'decrease' for relative"
+      required: true
+      selector:
+        select:
+          options:
+            - "set"
+            - "increase"
+            - "decrease"
+    temperature:
+      description: "Target temperature (for 'set') or degrees to change (for increase/decrease)"
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 90
+  sequence:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ adjustment == 'set' }}"
+          sequence:
+            - service: climate.set_temperature
+              target:
+                entity_id: "{{ entity_id }}"
+              data:
+                temperature: "{{ temperature }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ adjustment == 'increase' }}"
+          sequence:
+            - service: climate.set_temperature
+              target:
+                entity_id: "{{ entity_id }}"
+              data:
+                temperature: "{{ state_attr(entity_id, 'temperature') | float + temperature }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ adjustment == 'decrease' }}"
+          sequence:
+            - service: climate.set_temperature
+              target:
+                entity_id: "{{ entity_id }}"
+              data:
+                temperature: "{{ state_attr(entity_id, 'temperature') | float - temperature }}"
+
+# ==========================================================================
+# SECURITY SCRIPTS
+# ==========================================================================
+
+# Lock or unlock a door lock.
+# Critical action that may require authorization in production.
+control_lock:
+  alias: "Control Lock"
+  description: "Lock or unlock a door"
+  fields:
+    entity_id:
+      description: "The lock entity to control"
+      required: true
+      selector:
+        entity:
+          domain: lock
+    action:
+      description: "The action: lock or unlock"
+      required: true
+      selector:
+        select:
+          options:
+            - "lock"
+            - "unlock"
+  sequence:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ action == 'lock' }}"
+          sequence:
+            - service: lock.lock
+              target:
+                entity_id: "{{ entity_id }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ action == 'unlock' }}"
+          sequence:
+            - service: lock.unlock
+              target:
+                entity_id: "{{ entity_id }}"
+
+# Secure the entire house - locks all doors, closes garage, sets alarm.
+secure_house:
+  alias: "Secure House"
+  description: "Lock all doors and arm security system"
+  sequence:
+    - service: lock.lock
+      target:
+        entity_id: all
+    - service: cover.close_cover
+      target:
+        entity_id: group.garage_doors
+    - service: alarm_control_panel.alarm_arm_away
+      target:
+        entity_id: alarm_control_panel.home_alarm
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.away_mode
+
+# ==========================================================================
+# MEDIA CONTROL SCRIPTS
+# ==========================================================================
+
+# Control media playback on a specific device.
+control_media:
+  alias: "Control Media"
+  description: "Play, pause, or stop media on a device"
+  fields:
+    entity_id:
+      description: "The media player entity"
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    action:
+      description: "The action: play, pause, stop, next, previous"
+      required: true
+      selector:
+        select:
+          options:
+            - "play"
+            - "pause"
+            - "stop"
+            - "next"
+            - "previous"
+  sequence:
+    - service: "media_player.media_{{ action }}"
+      target:
+        entity_id: "{{ entity_id }}"
+
+# Set volume on a media player.
+set_volume:
+  alias: "Set Volume"
+  description: "Set the volume level on a media player"
+  fields:
+    entity_id:
+      description: "The media player entity"
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    volume:
+      description: "Volume level (0.0 to 1.0 or 0 to 100)"
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+  sequence:
+    - service: media_player.volume_set
+      target:
+        entity_id: "{{ entity_id }}"
+      data:
+        volume_level: "{{ volume if volume <= 1 else volume / 100 }}"
+
+# ==========================================================================
+# STATUS QUERY SCRIPTS
+# ==========================================================================
+
+# Get a comprehensive status report of the home.
+# Returns data suitable for the LLM to summarize.
+get_ship_status:
+  alias: "Get Ship Status"
+  description: "Get comprehensive status of all home systems"
+  sequence:
+    - variables:
+        status_report:
+          timestamp: "{{ now().isoformat() }}"
+          time_of_day: "{{ states('sensor.time_of_day') }}"
+          occupancy: "{{ states('sensor.home_status') }}"
+          lights_on: "{{ states('sensor.lights_on_count') }}"
+          open_entry_points: "{{ states('sensor.open_entry_points') }}"
+          temperature_indoor: "{{ states('sensor.indoor_temperature') | default('unknown') }}"
+          temperature_outdoor: "{{ states('sensor.outdoor_temperature') | default('unknown') }}"
+          red_alert: "{{ states('input_boolean.red_alert') }}"
+          away_mode: "{{ states('input_boolean.away_mode') }}"
+    - stop: "{{ status_report | to_json }}"
+
+# Get the state of a specific entity.
+# Useful for direct queries about device status.
+get_entity_state:
+  alias: "Get Entity State"
+  description: "Get the current state and attributes of an entity"
+  fields:
+    entity_id:
+      description: "The entity to query"
+      required: true
+      selector:
+        entity:
+  sequence:
+    - variables:
+        entity_state:
+          entity_id: "{{ entity_id }}"
+          state: "{{ states(entity_id) }}"
+          friendly_name: "{{ state_attr(entity_id, 'friendly_name') }}"
+          attributes: "{{ state_attr(entity_id, '') | default({}) }}"
+    - stop: "{{ entity_state | to_json }}"
+
+# ==========================================================================
+# ALERT PROTOCOLS
+# ==========================================================================
+
+# Red Alert - Emergency protocol that changes lighting, plays sounds,
+# locks doors, and sends notifications.
+red_alert_activate:
+  alias: "Red Alert Activate"
+  description: "Activate Red Alert emergency protocol"
+  sequence:
+    # Set the red alert flag
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.red_alert
+    # Change all lights to red with pulsing effect
+    - service: light.turn_on
+      target:
+        entity_id: all
+      data:
+        color_name: red
+        brightness: 255
+        effect: "pulse"
+    # Lock all doors
+    - service: lock.lock
+      target:
+        entity_id: all
+    # Play alert sound (requires media player setup)
+    - service: media_player.play_media
+      target:
+        entity_id: media_player.whole_house
+      data:
+        media_content_id: "/config/sounds/red_alert.mp3"
+        media_content_type: "audio/mp3"
+    # Send notification
+    - service: notify.mobile_app
+      data:
+        message: "RED ALERT: Security protocol activated."
+        title: "🚨 RED ALERT"
+        data:
+          priority: high
+          ttl: 0
+
+# Cancel Red Alert and restore normal operation.
+red_alert_cancel:
+  alias: "Red Alert Cancel"
+  description: "Deactivate Red Alert and restore normal lighting"
+  sequence:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.red_alert
+    - service: light.turn_on
+      target:
+        entity_id: all
+      data:
+        color_name: warm_white
+        brightness_pct: 80
+        effect: "none"
+    - service: notify.mobile_app
+      data:
+        message: "Red Alert cancelled. Systems returning to normal."
+        title: "✅ All Clear"
+
+# ==========================================================================
+# COMMUNICATION SCRIPTS
+# ==========================================================================
+
+# Make an announcement on all speakers.
+# The LLM uses this to broadcast messages throughout the home.
+ship_wide_announcement:
+  alias: "Ship Wide Announcement"
+  description: "Make an announcement on all speakers"
+  fields:
+    message:
+      description: "The message to announce"
+      required: true
+      selector:
+        text:
+          multiline: true
+  sequence:
+    - service: tts.speak
+      target:
+        entity_id: tts.piper
+      data:
+        cache: true
+        media_player_entity_id: media_player.whole_house
+        message: "{{ message }}"
+
+# Send a notification to mobile devices.
+send_notification:
+  alias: "Send Notification"
+  description: "Send a push notification to mobile devices"
+  fields:
+    title:
+      description: "Notification title"
+      required: true
+      selector:
+        text:
+    message:
+      description: "Notification message"
+      required: true
+      selector:
+        text:
+          multiline: true
+    priority:
+      description: "Priority level: normal or high"
+      required: false
+      default: "normal"
+      selector:
+        select:
+          options:
+            - "normal"
+            - "high"
+  sequence:
+    - service: notify.mobile_app
+      data:
+        title: "{{ title }}"
+        message: "{{ message }}"
+        data:
+          priority: "{{ priority }}"
+
+# ==========================================================================
+# TIMER AND REMINDER SCRIPTS
+# ==========================================================================
+
+# Set a timer that announces when complete.
+set_timer:
+  alias: "Set Timer"
+  description: "Set a countdown timer with voice announcement when done"
+  fields:
+    duration:
+      description: "Duration in minutes"
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 1440
+    label:
+      description: "What the timer is for"
+      required: false
+      default: "Timer"
+      selector:
+        text:
+  sequence:
+    - service: timer.start
+      target:
+        entity_id: timer.voice_timer
+      data:
+        duration: "{{ duration * 60 }}"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.timer_label
+      data:
+        value: "{{ label }}"

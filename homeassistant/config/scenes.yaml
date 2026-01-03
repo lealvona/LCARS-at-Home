@@ -1,0 +1,359 @@
+# LCARS Computer - Home Assistant Scenes
+#
+# Scenes define preset configurations for multiple entities that can be
+# activated with a single command. The LCARS Computer can activate these
+# scenes by name, enabling natural language commands like "Make it cozy"
+# or "Movie time".
+#
+# Each scene captures the desired state of lights, climate, and other
+# entities. When activated, all entities transition to their defined states.
+
+# ==========================================================================
+# TIME-OF-DAY SCENES
+# ==========================================================================
+
+# Morning scene - bright, energizing lighting to start the day.
+# Activated automatically at wake time or via voice command.
+- id: 'morning'
+  name: "Morning"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5000  # Cool daylight
+    light.kitchen:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5000
+    light.bedroom:
+      state: on
+      brightness_pct: 70
+      color_temp_kelvin: 4000
+
+# Daytime scene - full brightness for productivity.
+- id: 'daytime'
+  name: "Daytime"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 4500
+    light.kitchen:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 4500
+    light.office:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5000
+
+# Evening scene - warm, relaxed lighting as the sun sets.
+# Transitions the home to a more comfortable ambiance.
+- id: 'evening'
+  name: "Evening"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 70
+      color_temp_kelvin: 3000  # Warm white
+    light.kitchen:
+      state: on
+      brightness_pct: 60
+      color_temp_kelvin: 3000
+    light.bedroom:
+      state: on
+      brightness_pct: 40
+      color_temp_kelvin: 2700
+
+# Night scene - minimal lighting for sleeping.
+# Only essential path lighting remains active.
+- id: 'night'
+  name: "Night"
+  entities:
+    light.living_room:
+      state: off
+    light.kitchen:
+      state: off
+    light.bedroom:
+      state: on
+      brightness_pct: 5
+      color_temp_kelvin: 2200  # Very warm, dim
+    light.hallway:
+      state: on
+      brightness_pct: 10
+      color_temp_kelvin: 2200
+
+# ==========================================================================
+# ACTIVITY SCENES
+# ==========================================================================
+
+# Movie scene - dim lighting optimized for screen viewing.
+# Reduces glare while maintaining enough ambient light.
+- id: 'movie'
+  name: "Movie"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 15
+      color_temp_kelvin: 2700
+    light.kitchen:
+      state: off
+    light.tv_backlight:
+      state: on
+      brightness_pct: 30
+      rgb_color: [50, 50, 100]  # Soft blue bias lighting
+
+# Reading scene - focused task lighting.
+- id: 'reading'
+  name: "Reading"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 80
+      color_temp_kelvin: 4000
+    light.floor_lamp:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 4500
+
+# Dinner scene - warm, intimate lighting for meals.
+- id: 'dinner'
+  name: "Dinner"
+  entities:
+    light.dining_room:
+      state: on
+      brightness_pct: 60
+      color_temp_kelvin: 2700
+    light.kitchen:
+      state: on
+      brightness_pct: 40
+      color_temp_kelvin: 2700
+    light.living_room:
+      state: on
+      brightness_pct: 30
+      color_temp_kelvin: 2700
+
+# Party scene - vibrant, colorful lighting for entertaining.
+- id: 'party'
+  name: "Party"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 100
+      rgb_color: [255, 100, 0]  # Orange
+      effect: "colorloop"
+    light.kitchen:
+      state: on
+      brightness_pct: 80
+      rgb_color: [100, 0, 255]  # Purple
+
+# Work scene - bright, focused lighting for productivity.
+- id: 'work'
+  name: "Work"
+  entities:
+    light.office:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5000  # Daylight for alertness
+    light.desk_lamp:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5500
+
+# ==========================================================================
+# MOOD SCENES
+# ==========================================================================
+
+# Cozy scene - warm, dim lighting for relaxation.
+# Perfect for unwinding after a long day.
+- id: 'cozy'
+  name: "Cozy"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 40
+      color_temp_kelvin: 2500
+    light.floor_lamp:
+      state: on
+      brightness_pct: 30
+      color_temp_kelvin: 2200
+    light.kitchen:
+      state: off
+
+# Romantic scene - very dim, warm lighting.
+- id: 'romantic'
+  name: "Romantic"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 20
+      color_temp_kelvin: 2200
+    light.dining_room:
+      state: on
+      brightness_pct: 15
+      rgb_color: [255, 50, 50]  # Soft red
+
+# Focus scene - optimized for concentration.
+- id: 'focus'
+  name: "Focus"
+  entities:
+    light.office:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5500
+    light.living_room:
+      state: off
+    light.kitchen:
+      state: off
+
+# Calm scene - gentle, soothing lighting.
+- id: 'calm'
+  name: "Calm"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 30
+      rgb_color: [100, 150, 255]  # Soft blue
+    light.bedroom:
+      state: on
+      brightness_pct: 20
+      rgb_color: [150, 100, 255]  # Soft purple
+
+# ==========================================================================
+# ROOM-SPECIFIC SCENES
+# ==========================================================================
+
+# Living room bright - full illumination
+- id: 'living_room_bright'
+  name: "Living Room Bright"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 4000
+
+# Living room dim - subtle ambient light
+- id: 'living_room_dim'
+  name: "Living Room Dim"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 25
+      color_temp_kelvin: 2700
+
+# Living room off
+- id: 'living_room_off'
+  name: "Living Room Off"
+  entities:
+    light.living_room:
+      state: off
+
+# Bedroom bright
+- id: 'bedroom_bright'
+  name: "Bedroom Bright"
+  entities:
+    light.bedroom:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 4000
+
+# Bedroom dim
+- id: 'bedroom_dim'
+  name: "Bedroom Dim"
+  entities:
+    light.bedroom:
+      state: on
+      brightness_pct: 20
+      color_temp_kelvin: 2200
+
+# Bedroom off
+- id: 'bedroom_off'
+  name: "Bedroom Off"
+  entities:
+    light.bedroom:
+      state: off
+
+# Kitchen bright
+- id: 'kitchen_bright'
+  name: "Kitchen Bright"
+  entities:
+    light.kitchen:
+      state: on
+      brightness_pct: 100
+      color_temp_kelvin: 5000
+
+# Kitchen off
+- id: 'kitchen_off'
+  name: "Kitchen Off"
+  entities:
+    light.kitchen:
+      state: off
+
+# ==========================================================================
+# SPECIAL SCENES
+# ==========================================================================
+
+# All lights off - complete darkness
+- id: 'all_off'
+  name: "All Off"
+  entities:
+    light.living_room:
+      state: off
+    light.kitchen:
+      state: off
+    light.bedroom:
+      state: off
+    light.office:
+      state: off
+    light.hallway:
+      state: off
+    light.bathroom:
+      state: off
+
+# All lights on - maximum illumination
+- id: 'all_on'
+  name: "All On"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 100
+    light.kitchen:
+      state: on
+      brightness_pct: 100
+    light.bedroom:
+      state: on
+      brightness_pct: 100
+    light.office:
+      state: on
+      brightness_pct: 100
+    light.hallway:
+      state: on
+      brightness_pct: 100
+
+# Away scene - simulates occupancy while away
+- id: 'away'
+  name: "Away"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 60
+      color_temp_kelvin: 3500
+    light.bedroom:
+      state: off
+    light.kitchen:
+      state: off
+
+# Welcome home - welcoming lighting when arriving
+- id: 'welcome'
+  name: "Welcome"
+  entities:
+    light.living_room:
+      state: on
+      brightness_pct: 80
+      color_temp_kelvin: 3500
+    light.hallway:
+      state: on
+      brightness_pct: 100
+    light.kitchen:
+      state: on
+      brightness_pct: 60

@@ -1,0 +1,128 @@
+# LCARS Theme for Home Assistant
+# Inspired by Star Trek's Library Computer Access and Retrieval System
+#
+# To use: Select this theme in your profile settings or set as default
+
+lcars:
+  # Primary colors from the LCARS palette
+  primary-color: "#FF9900"              # LCARS Orange
+  accent-color: "#CC99CC"               # LCARS Lavender
+  
+  # Background colors
+  primary-background-color: "#000000"   # Black background
+  secondary-background-color: "#1A1A2E" # Dark blue-black
+  card-background-color: "#0D0D1A"      # Slightly lighter dark
+  
+  # Text colors
+  primary-text-color: "#FF9900"         # Orange text
+  secondary-text-color: "#CC99CC"       # Lavender secondary
+  text-primary-color: "#FFFFFF"         # White for contrast
+  disabled-text-color: "#666688"        # Muted purple-gray
+  
+  # Dividers and borders
+  divider-color: "#FF9900"
+  
+  # Header
+  app-header-background-color: "#1A1A2E"
+  app-header-text-color: "#FF9900"
+  
+  # Sidebar
+  sidebar-background-color: "#0D0D1A"
+  sidebar-text-color: "#FF9900"
+  sidebar-selected-background-color: "#FF9900"
+  sidebar-selected-text-color: "#000000"
+  sidebar-icon-color: "#CC99CC"
+  
+  # Cards
+  ha-card-background: "#0D0D1A"
+  ha-card-border-radius: "15px"
+  ha-card-box-shadow: "0 2px 10px rgba(255,153,0,0.3)"
+  
+  # Buttons
+  paper-item-icon-color: "#CC99CC"
+  paper-item-icon-active-color: "#FF9900"
+  
+  # Switches and toggles
+  switch-checked-color: "#FF9900"
+  switch-unchecked-color: "#666688"
+  switch-checked-button-color: "#FFCC00"
+  switch-unchecked-button-color: "#444466"
+  
+  # Sliders
+  paper-slider-knob-color: "#FF9900"
+  paper-slider-active-color: "#FF9900"
+  paper-slider-container-color: "#333355"
+  
+  # States
+  state-icon-color: "#CC99CC"
+  state-icon-active-color: "#FF9900"
+  state-icon-unavailable-color: "#444466"
+  
+  # Badges
+  label-badge-background-color: "#FF9900"
+  label-badge-text-color: "#000000"
+  
+  # Dialog
+  paper-dialog-background-color: "#1A1A2E"
+  
+  # Table
+  table-row-background-color: "#0D0D1A"
+  table-row-alternative-background-color: "#151525"
+  data-table-background-color: "#0D0D1A"
+  
+  # Code
+  code-editor-background-color: "#0D0D1A"
+  codemirror-keyword: "#FF9900"
+  codemirror-string: "#99CCFF"
+  codemirror-number: "#FFCC00"
+  codemirror-comment: "#666688"
+  
+  # Energy colors
+  energy-grid-consumption-color: "#FF6666"
+  energy-grid-return-color: "#66FF66"
+  energy-solar-color: "#FFCC00"
+  energy-battery-out-color: "#CC99CC"
+  energy-battery-in-color: "#9999FF"
+  
+  # RGB values for transparency effects
+  rgb-primary-color: "255, 153, 0"
+  rgb-accent-color: "204, 153, 204"
+  rgb-primary-text-color: "255, 255, 255"
+  rgb-secondary-text-color: "204, 153, 204"
+  rgb-card-background-color: "13, 13, 26"
+
+# Dark LCARS variant with more red tones (Red Alert mode)
+lcars-red-alert:
+  primary-color: "#FF3333"
+  accent-color: "#FF6666"
+  primary-background-color: "#1A0000"
+  secondary-background-color: "#330000"
+  card-background-color: "#1A0000"
+  primary-text-color: "#FF3333"
+  secondary-text-color: "#FF6666"
+  text-primary-color: "#FFFFFF"
+  app-header-background-color: "#330000"
+  app-header-text-color: "#FF3333"
+  sidebar-background-color: "#1A0000"
+  sidebar-text-color: "#FF3333"
+  ha-card-background: "#1A0000"
+  ha-card-box-shadow: "0 2px 15px rgba(255,0,0,0.5)"
+  switch-checked-color: "#FF3333"
+  state-icon-active-color: "#FF3333"
+
+# Light LCARS variant (daytime mode)
+lcars-light:
+  primary-color: "#FF9900"
+  accent-color: "#9999CC"
+  primary-background-color: "#EEEEFF"
+  secondary-background-color: "#DDDDEE"
+  card-background-color: "#FFFFFF"
+  primary-text-color: "#333355"
+  secondary-text-color: "#666688"
+  text-primary-color: "#000000"
+  app-header-background-color: "#FF9900"
+  app-header-text-color: "#000000"
+  sidebar-background-color: "#EEEEFF"
+  sidebar-text-color: "#333355"
+  ha-card-background: "#FFFFFF"
+  ha-card-box-shadow: "0 2px 10px rgba(0,0,0,0.1)"

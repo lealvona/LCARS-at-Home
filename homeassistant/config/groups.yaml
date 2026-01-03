@@ -1,0 +1,236 @@
+# LCARS Computer - Home Assistant Groups
+#
+# Groups organize entities into logical collections for collective control.
+# The LLM can reference these groups to control multiple devices with a
+# single command (e.g., "Turn off all lights" or "Lock all doors").
+#
+# Groups appear as entities themselves, allowing automations and scripts
+# to target them directly rather than listing individual entities.
+
+# ==========================================================================
+# LIGHTING GROUPS
+# ==========================================================================
+
+# All controllable lights in the home. This group enables commands like
+# "Computer, all lights off" without specifying individual fixtures.
+all_lights:
+  name: "All Lights"
+  entities:
+    - light.living_room
+    - light.kitchen
+    - light.bedroom
+    - light.office
+    - light.hallway
+    - light.bathroom
+    - light.dining_room
+    - light.garage
+
+# Living area lights for social spaces.
+living_area_lights:
+  name: "Living Area Lights"
+  entities:
+    - light.living_room
+    - light.kitchen
+    - light.dining_room
+
+# Bedroom and private area lights.
+bedroom_lights:
+  name: "Bedroom Lights"
+  entities:
+    - light.bedroom
+    - light.master_bathroom
+
+# Exterior lights for security and ambiance.
+exterior_lights:
+  name: "Exterior Lights"
+  entities:
+    - light.front_porch
+    - light.back_patio
+    - light.garage_exterior
+    - light.pathway
+
+# ==========================================================================
+# SECURITY GROUPS
+# ==========================================================================
+
+# All door locks for collective locking/unlocking operations.
+all_locks:
+  name: "All Locks"
+  entities:
+    - lock.front_door
+    - lock.back_door
+    - lock.garage_entry
+    - lock.side_door
+
+# Primary entry points that should be monitored for security.
+entry_doors:
+  name: "Entry Doors"
+  entities:
+    - binary_sensor.front_door
+    - binary_sensor.back_door
+    - binary_sensor.garage_door
+    - binary_sensor.side_door
+
+# Window sensors for perimeter security monitoring.
+windows:
+  name: "Windows"
+  entities:
+    - binary_sensor.living_room_window
+    - binary_sensor.bedroom_window
+    - binary_sensor.kitchen_window
+    - binary_sensor.office_window
+
+# Motion sensors for occupancy detection and security.
+motion_sensors:
+  name: "Motion Sensors"
+  entities:
+    - binary_sensor.living_room_motion
+    - binary_sensor.hallway_motion
+    - binary_sensor.garage_motion
+    - binary_sensor.backyard_motion
+
+# ==========================================================================
+# GARAGE AND EXTERIOR
+# ==========================================================================
+
+# Garage door covers for open/close control.
+garage_doors:
+  name: "Garage Doors"
+  entities:
+    - cover.main_garage_door
+    - cover.side_garage_door
+
+# All covers including blinds and shades.
+all_covers:
+  name: "All Covers"
+  entities:
+    - cover.main_garage_door
+    - cover.living_room_blinds
+    - cover.bedroom_blinds
+    - cover.office_blinds
+
+# ==========================================================================
+# CLIMATE AND ENVIRONMENT
+# ==========================================================================
+
+# Temperature sensors throughout the home.
+temperature_sensors:
+  name: "Temperature Sensors"
+  entities:
+    - sensor.living_room_temperature
+    - sensor.bedroom_temperature
+    - sensor.kitchen_temperature
+    - sensor.outdoor_temperature
+
+# Humidity sensors for comfort monitoring.
+humidity_sensors:
+  name: "Humidity Sensors"
+  entities:
+    - sensor.living_room_humidity
+    - sensor.bedroom_humidity
+    - sensor.bathroom_humidity
+    - sensor.outdoor_humidity
+
+# ==========================================================================
+# MEDIA AND ENTERTAINMENT
+# ==========================================================================
+
+# All media players for whole-house announcements and control.
+all_media_players:
+  name: "All Media Players"
+  entities:
+    - media_player.living_room_tv
+    - media_player.living_room_speaker
+    - media_player.bedroom_speaker
+    - media_player.kitchen_speaker
+    - media_player.office_speaker
+
+# Speakers only (for TTS announcements throughout the house).
+all_speakers:
+  name: "All Speakers"
+  entities:
+    - media_player.living_room_speaker
+    - media_player.bedroom_speaker
+    - media_player.kitchen_speaker
+    - media_player.office_speaker
+
+# Television and display devices.
+displays:
+  name: "Displays"
+  entities:
+    - media_player.living_room_tv
+    - media_player.bedroom_tv
+    - media_player.office_monitor
+
+# ==========================================================================
+# ROOM-BASED GROUPS
+# ==========================================================================
+
+# Living room devices for room-specific control.
+living_room:
+  name: "Living Room"
+  entities:
+    - light.living_room
+    - media_player.living_room_tv
+    - media_player.living_room_speaker
+    - sensor.living_room_temperature
+    - binary_sensor.living_room_motion
+
+# Kitchen devices.
+kitchen:
+  name: "Kitchen"
+  entities:
+    - light.kitchen
+    - media_player.kitchen_speaker
+    - sensor.kitchen_temperature
+
+# Bedroom devices.
+bedroom:
+  name: "Bedroom"
+  entities:
+    - light.bedroom
+    - media_player.bedroom_speaker
+    - sensor.bedroom_temperature
+    - cover.bedroom_blinds
+
+# Office devices for work area.
+office:
+  name: "Office"
+  entities:
+    - light.office
+    - media_player.office_speaker
+    - sensor.office_temperature
+    - cover.office_blinds
+
+# ==========================================================================
+# OCCUPANCY AND PRESENCE
+# ==========================================================================
+
+# All tracked people in the household.
+family:
+  name: "Family Members"
+  entities:
+    - person.commander
+    - person.first_officer
+    # Add additional family members here
+
+# ==========================================================================
+# SYSTEM MONITORING
+# ==========================================================================
+
+# Battery-powered devices that need monitoring.
+battery_devices:
+  name: "Battery Devices"
+  entities:
+    - sensor.front_door_battery
+    - sensor.back_door_battery
+    - sensor.motion_sensor_battery
+    - sensor.window_sensor_battery
+
+# Voice satellites for the LCARS Computer system.
+voice_satellites:
+  name: "Voice Satellites"
+  entities:
+    - binary_sensor.voice_satellite_living_room
+    - binary_sensor.voice_satellite_bedroom
+    - binary_sensor.voice_satellite_kitchen

@@ -1,0 +1,373 @@
+# LCARS Computer - Home Assistant Automations
+#
+# These automations handle voice assistant events, timer completions,
+# and other triggers that integrate with the LCARS Computer system.
+#
+# Automations provide the reactive layer that responds to events
+# and state changes without requiring manual intervention.
+
+# ==========================================================================
+# VOICE ASSISTANT EVENT HANDLERS
+# ==========================================================================
+
+# Store the last voice command for debugging and context retention.
+# This automation captures every voice command processed by the Assist pipeline.
+- id: 'voice_command_logger'
+  alias: "LCARS: Log Voice Commands"
+  description: "Store the last voice command for debugging and LLM context"
+  trigger:
+    - platform: event
+      event_type: assist_pipeline_run_end
+  condition:
+    - condition: template
+      value_template: "{{ trigger.event.data.stt_output is defined }}"
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.last_voice_command
+      data:
+        value: "{{ trigger.event.data.stt_output.text[:255] }}"
+    - service: logbook.log
+      data:
+        name: "Voice Command"
+        message: "{{ trigger.event.data.stt_output.text }}"
+        entity_id: input_text.last_voice_command
+
+# Forward voice commands to n8n for LLM processing.
+# This is the main integration point between Home Assistant's voice pipeline
+# and the n8n orchestration engine.
+- id: 'voice_to_n8n'
+  alias: "LCARS: Forward Voice to n8n"
+  description: "Send voice commands to n8n webhook for LLM processing"
+  trigger:
+    - platform: event
+      event_type: assist_pipeline_run_end
+  condition:
+    # Only trigger if speech was successfully recognized
+    - condition: template
+      value_template: "{{ trigger.event.data.stt_output is defined }}"
+    # Skip if the built-in intent handler already matched
+    - condition: template
+      value_template: "{{ trigger.event.data.intent_output is not defined or trigger.event.data.intent_output.response.speech is not defined }}"
+  action:
+    - service: rest_command.n8n_voice_command
+      data:
+        text: "{{ trigger.event.data.stt_output.text }}"
+        conversation_id: "{{ trigger.event.data.pipeline_run_id }}"
+        device_id: "{{ trigger.event.data.device_id | default('unknown') }}"
+        language: "{{ trigger.event.data.language | default('en') }}"
+
+# ==========================================================================
+# TIMER COMPLETION HANDLERS
+# ==========================================================================
+
+# Announce when a voice-initiated timer completes.
+# Uses the stored timer label for a natural announcement.
+- id: 'timer_completion_announcement'
+  alias: "LCARS: Timer Completion Announcement"
+  description: "Announce when a timer set by voice command completes"
+  trigger:
+    - platform: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.voice_timer
+  action:
+    - variables:
+        timer_label: "{{ states('input_text.timer_label') | default('Timer') }}"
+    - service: tts.speak
+      target:
+        entity_id: tts.piper
+      data:
+        media_player_entity_id: media_player.whole_house
+        message: "Attention. {{ timer_label }} timer complete."
+    - service: notify.mobile_app
+      data:
+        title: "⏱️ Timer Complete"
+        message: "{{ timer_label }} timer has finished."
+
+# ==========================================================================
+# PRESENCE AND SECURITY AUTOMATIONS
+# ==========================================================================
+
+# Welcome home announcement when someone arrives.
+# Only announces during waking hours and when not in DND mode.
+- id: 'welcome_home'
+  alias: "LCARS: Welcome Home Announcement"
+  description: "Announce when a tracked person arrives home"
+  trigger:
+    - platform: state
+      entity_id:
+        - person.commander  # Replace with your person entities
+      to: 'home'
+  condition:
+    - condition: state
+      entity_id: input_boolean.do_not_disturb
+      state: 'off'
+    - condition: state
+      entity_id: input_boolean.away_mode
+      state: 'on'
+    - condition: time
+      after: '07:00:00'
+      before: '22:00:00'
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.away_mode
+    - service: tts.speak
+      target:
+        entity_id: tts.piper
+      data:
+        media_player_entity_id: media_player.whole_house
+        message: "Welcome home, {{ trigger.to_state.attributes.friendly_name }}. All systems nominal."
+
+# Alert when everyone has left and Away Mode should be activated.
+- id: 'everyone_left'
+  alias: "LCARS: Everyone Left Home"
+  description: "Activate away mode when no one is home"
+  trigger:
+    - platform: state
+      entity_id: sensor.home_status
+      to: 'unoccupied'
+      for:
+        minutes: 5
+  condition:
+    - condition: state
+      entity_id: input_boolean.away_mode
+      state: 'off'
+  action:
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.away_mode
+    - service: notify.mobile_app
+      data:
+        title: "🏠 Away Mode Activated"
+        message: "All crew members have departed. Security protocols engaged."
+        data:
+          actions:
+            - action: "DISABLE_AWAY"
+              title: "Disable Away Mode"
+
+# Handle the notification action to disable away mode remotely.
+- id: 'disable_away_from_notification'
+  alias: "LCARS: Disable Away Mode from Notification"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: "DISABLE_AWAY"
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.away_mode
+    - service: notify.mobile_app
+      data:
+        message: "Away Mode deactivated."
+
+# ==========================================================================
+# SECURITY ALERT AUTOMATIONS
+# ==========================================================================
+
+# Alert when a door or window opens while in Away Mode.
+- id: 'away_mode_entry_alert'
+  alias: "LCARS: Entry Point Opened in Away Mode"
+  description: "Alert when door/window opens while away"
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.front_door
+        - binary_sensor.back_door
+        - binary_sensor.garage_door
+      to: 'on'
+  condition:
+    - condition: state
+      entity_id: input_boolean.away_mode
+      state: 'on'
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "🚨 SECURITY ALERT"
+        message: "{{ trigger.to_state.attributes.friendly_name }} opened while Away Mode is active!"
+        data:
+          priority: high
+          ttl: 0
+          channel: alarm
+          actions:
+            - action: "ACTIVATE_RED_ALERT"
+              title: "Activate Red Alert"
+            - action: "DISMISS_ALERT"
+              title: "Dismiss"
+
+# Handle notification action to activate Red Alert.
+- id: 'activate_red_alert_from_notification'
+  alias: "LCARS: Activate Red Alert from Notification"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: "ACTIVATE_RED_ALERT"
+  action:
+    - service: script.red_alert_activate
+
+# ==========================================================================
+# TIME-BASED AUTOMATIONS
+# ==========================================================================
+
+# Good morning routine - activates at sunrise or 7 AM, whichever is later.
+- id: 'morning_routine'
+  alias: "LCARS: Morning Routine"
+  description: "Gentle wake-up routine with status briefing"
+  trigger:
+    - platform: time
+      at: '07:00:00'
+  condition:
+    - condition: state
+      entity_id: input_boolean.do_not_disturb
+      state: 'off'
+    - condition: state
+      entity_id: sensor.home_status
+      state: 'unoccupied'
+      match: 'not'
+  action:
+    - service: scene.turn_on
+      target:
+        entity_id: scene.morning
+    - delay:
+        seconds: 30
+    - service: tts.speak
+      target:
+        entity_id: tts.piper
+      data:
+        media_player_entity_id: media_player.bedroom
+        message: >
+          Good morning, Commander. The time is {{ now().strftime('%H%M') }} hours.
+          Current temperature is {{ states('sensor.outdoor_temperature') | default('unknown') }} degrees.
+          {% if states('sensor.open_entry_points') | int > 0 %}
+          Note: {{ states('sensor.open_entry_points') }} entry points are currently open.
+          {% endif %}
+          All systems operational.
+
+# Evening routine - dim lights and set comfortable temperature.
+- id: 'evening_routine'
+  alias: "LCARS: Evening Routine"
+  description: "Transition to evening lighting and temperature"
+  trigger:
+    - platform: sun
+      event: sunset
+      offset: "+00:30:00"
+  condition:
+    - condition: state
+      entity_id: input_boolean.away_mode
+      state: 'off'
+  action:
+    - service: scene.turn_on
+      target:
+        entity_id: scene.evening
+
+# Night mode activation - secure the house for sleeping.
+- id: 'night_mode'
+  alias: "LCARS: Night Mode"
+  description: "Secure house and minimize lighting at bedtime"
+  trigger:
+    - platform: time
+      at: '23:00:00'
+  condition:
+    - condition: state
+      entity_id: input_boolean.do_not_disturb
+      state: 'off'
+    - condition: state
+      entity_id: sensor.home_status
+      state: 'unoccupied'
+      match: 'not'
+  action:
+    - service: scene.turn_on
+      target:
+        entity_id: scene.night
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.do_not_disturb
+
+# ==========================================================================
+# RED ALERT MANAGEMENT
+# ==========================================================================
+
+# Auto-cancel Red Alert after 5 minutes if not manually cancelled.
+# This prevents the house from staying in emergency mode indefinitely.
+- id: 'red_alert_auto_cancel'
+  alias: "LCARS: Auto-Cancel Red Alert"
+  description: "Automatically cancel Red Alert after timeout"
+  trigger:
+    - platform: state
+      entity_id: input_boolean.red_alert
+      to: 'on'
+      for:
+        minutes: 5
+  action:
+    - service: script.red_alert_cancel
+    - service: notify.mobile_app
+      data:
+        title: "Red Alert Auto-Cancelled"
+        message: "Red Alert was automatically cancelled after 5 minutes. Review security logs."
+
+# ==========================================================================
+# MAINTENANCE AND MONITORING
+# ==========================================================================
+
+# Alert when a battery-powered device has low battery.
+- id: 'low_battery_alert'
+  alias: "LCARS: Low Battery Alert"
+  description: "Alert when device batteries are low"
+  trigger:
+    - platform: numeric_state
+      entity_id:
+        - sensor.front_door_battery
+        - sensor.motion_sensor_battery
+        # Add your battery sensors here
+      below: 20
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "🔋 Low Battery Alert"
+        message: "{{ trigger.to_state.attributes.friendly_name }} battery is at {{ trigger.to_state.state }}%"
+
+# Daily system health check notification.
+- id: 'daily_health_check'
+  alias: "LCARS: Daily Health Check"
+  description: "Send daily system status summary"
+  trigger:
+    - platform: time
+      at: '08:00:00'
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "📊 Daily Ship Status"
+        message: >
+          Systems Report - {{ now().strftime('%A, %B %d') }}
+          
+          Lights on: {{ states('sensor.lights_on_count') }}
+          Open entries: {{ states('sensor.open_entry_points') }}
+          Temperature: {{ states('sensor.indoor_temperature') | default('N/A') }}°
+
+# ==========================================================================
+# CHIME TTS INTEGRATION
+# ==========================================================================
+
+# Play the LCARS processing chirp before any TTS announcement.
+# This provides immediate audio feedback while the TTS generates.
+- id: 'tts_chirp_prefix'
+  alias: "LCARS: TTS Chirp Prefix"
+  description: "Play LCARS chirp before TTS announcements"
+  trigger:
+    - platform: event
+      event_type: call_service
+      event_data:
+        domain: tts
+        service: speak
+  action:
+    # Note: This requires the Chime TTS integration from HACS
+    # If not using Chime TTS, this automation can be disabled
+    - service: chime_tts.say
+      data:
+        chime_path: /config/sounds/lcars_chirp.mp3
+        message: ""
+        media_player: "{{ trigger.event.data.service_data.media_player_entity_id }}"
+  mode: parallel

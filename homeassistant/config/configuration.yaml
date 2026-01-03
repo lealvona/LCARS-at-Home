@@ -1,0 +1,293 @@
+# LCARS Computer - Home Assistant Configuration
+# 
+# This configuration file sets up Home Assistant as the central hub
+# for the Star Trek voice assistant system. It integrates with:
+#   - Wyoming Protocol (local voice processing)
+#   - Extended OpenAI Conversation (LLM integration via n8n/Open WebUI)
+#   - Various smart home devices
+#
+# Place this file at: /config/configuration.yaml
+# After modifying, restart Home Assistant or reload specific components.
+
+# ==========================================================================
+# CORE CONFIGURATION
+# ==========================================================================
+
+# The homeassistant section defines basic settings for your installation.
+# These values affect how Home Assistant identifies itself and handles time.
+homeassistant:
+  name: "USS Enterprise"
+  unit_system: imperial  # Change to 'metric' if preferred
+  time_zone: "America/New_York"  # Match your .env TIMEZONE
+  
+  # Customization allows you to set friendly names and icons for entities.
+  # This helps the LLM understand your home better.
+  customize: !include customize.yaml
+  
+  # Packages allow modular configuration organization.
+  # Each package can contain its own automations, scripts, and entities.
+  packages: !include_dir_named packages/
+
+# ==========================================================================
+# FRONTEND & INTERFACE
+# ==========================================================================
+
+# Enable the default frontend UI.
+frontend:
+  themes: !include_dir_merge_named themes/
+
+# Enable the iOS/Android companion app integration.
+mobile_app:
+
+# Enable the system health component for diagnostics.
+system_health:
+
+# ==========================================================================
+# VOICE ASSISTANT CONFIGURATION
+# ==========================================================================
+
+# The assist_pipeline integration manages the complete voice processing chain.
+# This is the core of the "Computer" voice experience.
+assist_pipeline:
+
+# Conversation integration enables natural language understanding.
+# We configure it to use the Extended OpenAI Conversation for LLM-powered responses.
+conversation:
+
+# ==========================================================================
+# WYOMING PROTOCOL INTEGRATIONS
+# ==========================================================================
+# These services handle the voice processing pipeline.
+# They run as separate containers and communicate via the Wyoming protocol.
+
+# Whisper - Speech-to-Text
+# Converts spoken audio to text for processing.
+# The faster-whisper implementation provides GPU-accelerated transcription.
+wyoming:
+
+# ==========================================================================
+# LLM INTEGRATION
+# ==========================================================================
+
+# REST commands allow Home Assistant to call external APIs.
+# These are used to communicate with n8n webhooks and Open WebUI.
+rest_command:
+  # Call n8n webhook for voice command processing
+  n8n_voice_command:
+    url: "http://host.docker.internal:5678/webhook/voice-command"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+    payload: >
+      {
+        "text": "{{ text }}",
+        "conversation_id": "{{ conversation_id }}",
+        "device_id": "{{ device_id }}",
+        "language": "{{ language }}"
+      }
+    timeout: 30
+    
+  # Call n8n for long-running async tasks (fire-and-forget)
+  n8n_async_task:
+    url: "http://host.docker.internal:5678/webhook/async-task"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+    payload: >
+      {
+        "task": "{{ task }}",
+        "parameters": {{ parameters | to_json }},
+        "callback_entity": "{{ callback_entity }}"
+      }
+    timeout: 5  # Short timeout - we don't wait for completion
+    
+  # Direct call to Open WebUI API for RAG queries
+  openwebui_query:
+    url: "http://host.docker.internal:3000/api/chat/completions"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer {{ api_key }}"
+    payload: >
+      {
+        "model": "llama3.1:8b",
+        "messages": [
+          {"role": "system", "content": "{{ system_prompt }}"},
+          {"role": "user", "content": "{{ user_message }}"}
+        ],
+        "stream": false
+      }
+    timeout: 60
+
+# ==========================================================================
+# SENSORS & INPUT HELPERS
+# ==========================================================================
+
+# Template sensors derive values from other entities.
+# These provide contextual information to the LLM.
+template:
+  - sensor:
+      # Provides time-of-day context to the LLM (morning, afternoon, evening, night)
+      - name: "Time of Day"
+        unique_id: time_of_day_context
+        state: >
+          {% set hour = now().hour %}
+          {% if hour < 6 %}night
+          {% elif hour < 12 %}morning
+          {% elif hour < 18 %}afternoon
+          {% else %}evening
+          {% endif %}
+          
+      # Provides a summary of home occupancy status
+      - name: "Home Status"
+        unique_id: home_status_summary
+        state: >
+          {% set people_home = states.person | selectattr('state', 'eq', 'home') | list | count %}
+          {% if people_home == 0 %}unoccupied
+          {% elif people_home == 1 %}single occupant
+          {% else %}{{ people_home }} occupants
+          {% endif %}
+          
+      # Counts the number of lights currently on
+      - name: "Lights On Count"
+        unique_id: lights_on_count
+        state: "{{ states.light | selectattr('state', 'eq', 'on') | list | count }}"
+        
+      # Counts open doors and windows (security status)
+      - name: "Open Entry Points"
+        unique_id: open_entry_points
+        state: >
+          {{ states.binary_sensor 
+             | selectattr('attributes.device_class', 'in', ['door', 'window', 'opening'])
+             | selectattr('state', 'eq', 'on')
+             | list | count }}
+
+# Input helpers for storing persistent state.
+input_text:
+  # Stores the last voice command for debugging
+  last_voice_command:
+    name: "Last Voice Command"
+    max: 255
+    
+  # Stores the LCARS persona response
+  last_computer_response:
+    name: "Last Computer Response"
+    max: 1000
+
+input_boolean:
+  # Toggle for "Red Alert" mode
+  red_alert:
+    name: "Red Alert"
+    icon: mdi:alarm-light
+    
+  # Toggle for "Do Not Disturb" mode
+  do_not_disturb:
+    name: "Do Not Disturb"
+    icon: mdi:bell-off
+    
+  # Toggle for "Away Mode"
+  away_mode:
+    name: "Away Mode"
+    icon: mdi:home-export-outline
+
+# ==========================================================================
+# SCRIPTS
+# ==========================================================================
+
+# Scripts define reusable sequences of actions.
+# These are exposed as "tools" to the LLM for execution.
+script: !include scripts.yaml
+
+# ==========================================================================
+# AUTOMATIONS
+# ==========================================================================
+
+# Automations respond to events and state changes.
+# Voice-triggered automations are defined here.
+automation: !include automations.yaml
+
+# ==========================================================================
+# SCENES
+# ==========================================================================
+
+# Scenes define preset configurations for multiple entities.
+# The LLM can activate these by name.
+scene: !include scenes.yaml
+
+# ==========================================================================
+# GROUPS
+# ==========================================================================
+
+# Groups organize entities for collective control.
+# Example: "All Lights", "Living Room", etc.
+group: !include groups.yaml
+
+# ==========================================================================
+# SHELL COMMANDS
+# ==========================================================================
+
+# Shell commands allow executing system commands.
+# Use with caution - these run with Home Assistant's permissions.
+shell_command:
+  # Play the LCARS processing chirp sound
+  play_lcars_chirp: 'aplay /config/sounds/lcars_chirp.wav'
+  
+  # Play the Red Alert klaxon
+  play_red_alert: 'aplay /config/sounds/red_alert.wav'
+
+# ==========================================================================
+# MEDIA PLAYER
+# ==========================================================================
+
+# VLC Telnet allows playing sounds on the server itself.
+# Useful for announcement sounds and alerts.
+# Uncomment if you want server-side audio playback.
+# media_player:
+#   - platform: vlc_telnet
+#     host: localhost
+#     port: 4212
+#     password: your_vlc_password
+
+# ==========================================================================
+# LOGGER
+# ==========================================================================
+
+# Logger configuration for debugging.
+# Increase verbosity for specific components when troubleshooting.
+logger:
+  default: info
+  logs:
+    # Voice assistant debugging
+    homeassistant.components.assist_pipeline: debug
+    homeassistant.components.conversation: debug
+    homeassistant.components.wyoming: debug
+    # Custom component debugging
+    custom_components.extended_openai_conversation: debug
+
+# ==========================================================================
+# RECORDER
+# ==========================================================================
+
+# Recorder configuration controls what's saved to the database.
+# Excluding high-frequency sensors reduces database size.
+recorder:
+  purge_keep_days: 10
+  exclude:
+    domains:
+      - automation
+      - updater
+    entity_globs:
+      - sensor.weather_*
+    entities:
+      - sun.sun
+
+# ==========================================================================
+# HISTORY
+# ==========================================================================
+
+# History provides the graphs in the frontend.
+history:
+  exclude:
+    domains:
+      - automation
+      - script

@@ -1,0 +1,402 @@
+# LCARS Computer - Extended OpenAI Conversation Configuration
+#
+# This configuration file sets up the Extended OpenAI Conversation custom component
+# to work with the local Open WebUI/Ollama instance and expose Home Assistant
+# tools to the LLM.
+#
+# Installation: Install via HACS -> Custom Repositories
+# Repository: https://github.com/jekalmin/extended_openai_conversation
+#
+# Place this content in your configuration.yaml or include it.
+# After adding, restart Home Assistant and configure the integration via UI.
+
+# ==========================================================================
+# EXTENDED OPENAI CONVERSATION INTEGRATION
+# ==========================================================================
+#
+# This integration bridges Home Assistant's conversation system with local LLMs.
+# It supports function calling, allowing the LLM to control your home.
+#
+# NOTE: After adding this to configuration.yaml, you must also configure
+# the integration via Settings -> Devices & Services -> Add Integration
+# -> Extended OpenAI Conversation
+
+# The actual integration is configured via UI. Below is the recommended
+# YAML configuration for the "Options" section once added:
+
+# ==========================================================================
+# RECOMMENDED UI CONFIGURATION VALUES
+# ==========================================================================
+#
+# API Settings:
+#   Base URL: http://localhost:3000/v1
+#   API Key: [Your Open WebUI API key]
+#   Model: llama3.1:8b (or your preferred model)
+#
+# Conversation Settings:
+#   Max Tokens: 1024
+#   Temperature: 0.7
+#   Top P: 0.95
+#
+# System Prompt: [Contents of prompts/lcars_persona.txt]
+
+# ==========================================================================
+# TOOL SPECIFICATIONS (Function Calling)
+# ==========================================================================
+#
+# These YAML blocks define the "tools" (functions) the LLM can call.
+# Copy these into the "Spec" field in the integration options.
+# The LLM will use these to interact with Home Assistant.
+
+# --- BEGIN SPEC CONFIGURATION ---
+# Copy everything below this line into the "Spec" field
+
+- spec:
+    name: control_light
+    description: "Turn a light on, off, or adjust its brightness and color"
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: "The light entity ID (e.g., light.living_room, light.bedroom_ceiling)"
+        action:
+          type: string
+          enum: ["on", "off", "toggle"]
+          description: "The action to perform"
+        brightness_pct:
+          type: integer
+          description: "Brightness percentage from 0 to 100"
+        color_name:
+          type: string
+          description: "Color name like red, blue, green, warm_white, cool_white"
+      required:
+        - entity_id
+        - action
+  function:
+    type: script
+    sequence:
+      - service: script.control_light
+        data:
+          entity_id: "{{ entity_id }}"
+          action: "{{ action }}"
+          brightness_pct: "{{ brightness_pct | default(100) }}"
+          color_name: "{{ color_name | default('') }}"
+
+- spec:
+    name: get_entity_state
+    description: "Get the current state of any entity in the home (lights, sensors, switches, locks, etc.)"
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: "The entity ID to query (e.g., sensor.temperature, light.kitchen, lock.front_door)"
+      required:
+        - entity_id
+  function:
+    type: template
+    value_template: >
+      The {{ state_attr(entity_id, 'friendly_name') or entity_id }} is currently {{ states(entity_id) }}.
+      {% set attrs = state_attr(entity_id, '') %}
+      {% if attrs.brightness is defined %}Brightness: {{ (attrs.brightness / 255 * 100) | round }}%.{% endif %}
+      {% if attrs.temperature is defined %}Temperature setting: {{ attrs.temperature }}°.{% endif %}
+
+- spec:
+    name: control_climate
+    description: "Adjust the thermostat temperature"
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: "The climate entity ID (e.g., climate.main_thermostat)"
+        temperature:
+          type: number
+          description: "Target temperature in degrees"
+        hvac_mode:
+          type: string
+          enum: ["heat", "cool", "auto", "off"]
+          description: "HVAC mode"
+      required:
+        - entity_id
+  function:
+    type: script
+    sequence:
+      - service: climate.set_temperature
+        target:
+          entity_id: "{{ entity_id }}"
+        data:
+          temperature: "{{ temperature | default(72) }}"
+          hvac_mode: "{{ hvac_mode | default(omit) }}"
+
+- spec:
+    name: control_lock
+    description: "Lock or unlock a door lock"
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: "The lock entity ID (e.g., lock.front_door, lock.garage)"
+        action:
+          type: string
+          enum: ["lock", "unlock"]
+          description: "Lock or unlock the door"
+      required:
+        - entity_id
+        - action
+  function:
+    type: script
+    sequence:
+      - service: "lock.{{ action }}"
+        target:
+          entity_id: "{{ entity_id }}"
+
+- spec:
+    name: activate_scene
+    description: "Activate a predefined scene in the home"
+    parameters:
+      type: object
+      properties:
+        scene_name:
+          type: string
+          description: "Name of the scene to activate (e.g., movie_night, bedtime, morning, party)"
+      required:
+        - scene_name
+  function:
+    type: script
+    sequence:
+      - service: scene.turn_on
+        target:
+          entity_id: "scene.{{ scene_name }}"
+
+- spec:
+    name: get_weather
+    description: "Get current weather conditions and forecast"
+    parameters:
+      type: object
+      properties: {}
+  function:
+    type: template
+    value_template: >
+      Current weather conditions:
+      Temperature: {{ states('sensor.outdoor_temperature') | default('unknown') }}°
+      Condition: {{ states('weather.home') | default('unknown') }}
+      Humidity: {{ state_attr('weather.home', 'humidity') | default('unknown') }}%
+      {% if state_attr('weather.home', 'forecast') %}
+      Forecast: {{ state_attr('weather.home', 'forecast')[0].condition }} with high of {{ state_attr('weather.home', 'forecast')[0].temperature }}°
+      {% endif %}
+
+- spec:
+    name: control_media
+    description: "Control media playback on speakers and TVs"
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: "Media player entity ID"
+        action:
+          type: string
+          enum: ["play", "pause", "stop", "next", "previous"]
+          description: "Media control action"
+        volume:
+          type: number
+          description: "Volume level from 0 to 100"
+      required:
+        - entity_id
+        - action
+  function:
+    type: script
+    sequence:
+      - choose:
+          - conditions: "{{ volume is defined }}"
+            sequence:
+              - service: media_player.volume_set
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  volume_level: "{{ volume / 100 }}"
+      - service: "media_player.media_{{ action }}"
+        target:
+          entity_id: "{{ entity_id }}"
+
+- spec:
+    name: get_ship_status
+    description: "Get comprehensive status of all home systems (lights, security, climate, occupancy)"
+    parameters:
+      type: object
+      properties: {}
+  function:
+    type: template
+    value_template: >
+      Ship status report at {{ now().strftime('%H%M hours') }}:
+      
+      OCCUPANCY: {{ states('sensor.home_status') | default('unknown') }}
+      
+      ENVIRONMENTAL:
+      - Interior temperature: {{ states('sensor.indoor_temperature') | default('unknown') }}°
+      - Exterior temperature: {{ states('sensor.outdoor_temperature') | default('unknown') }}°
+      - HVAC mode: {{ states('climate.main_thermostat') | default('unknown') }}
+      
+      LIGHTING:
+      - Active lights: {{ states('sensor.lights_on_count') | default('0') }} of {{ states.light | list | count }}
+      
+      SECURITY:
+      - Open entry points: {{ states('sensor.open_entry_points') | default('0') }}
+      - Red Alert: {{ 'ACTIVE' if is_state('input_boolean.red_alert', 'on') else 'Inactive' }}
+      - Away Mode: {{ 'Active' if is_state('input_boolean.away_mode', 'on') else 'Inactive' }}
+      
+      All systems nominal unless otherwise indicated.
+
+- spec:
+    name: red_alert
+    description: "Activate or deactivate Red Alert emergency protocol"
+    parameters:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: ["activate", "cancel"]
+          description: "Activate or cancel Red Alert"
+      required:
+        - action
+  function:
+    type: script
+    sequence:
+      - choose:
+          - conditions: "{{ action == 'activate' }}"
+            sequence:
+              - service: script.red_alert_activate
+          - conditions: "{{ action == 'cancel' }}"
+            sequence:
+              - service: script.red_alert_cancel
+
+- spec:
+    name: make_announcement
+    description: "Make a voice announcement on speakers throughout the home"
+    parameters:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "The message to announce"
+        target:
+          type: string
+          description: "Where to announce: 'all', 'living_room', 'bedroom', etc."
+      required:
+        - message
+  function:
+    type: script
+    sequence:
+      - service: tts.speak
+        target:
+          entity_id: tts.piper
+        data:
+          media_player_entity_id: >
+            {% if target == 'all' %}media_player.whole_house{% else %}media_player.{{ target }}{% endif %}
+          message: "{{ message }}"
+
+- spec:
+    name: set_timer
+    description: "Set a countdown timer with voice notification when complete"
+    parameters:
+      type: object
+      properties:
+        minutes:
+          type: integer
+          description: "Timer duration in minutes"
+        label:
+          type: string
+          description: "What the timer is for (e.g., 'pasta', 'laundry', 'meeting')"
+      required:
+        - minutes
+  function:
+    type: script
+    sequence:
+      - service: timer.start
+        target:
+          entity_id: timer.voice_timer
+        data:
+          duration: "{{ minutes * 60 }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.timer_label
+        data:
+          value: "{{ label | default('Timer') }}"
+
+- spec:
+    name: call_n8n_workflow
+    description: "Trigger an n8n workflow for complex tasks like research, data analysis, or multi-step automations"
+    parameters:
+      type: object
+      properties:
+        workflow:
+          type: string
+          description: "The workflow to trigger: 'deep_research', 'analyze_data', 'generate_report'"
+        query:
+          type: string
+          description: "The task or query to process"
+      required:
+        - workflow
+        - query
+  function:
+    type: rest_command
+    rest_command: n8n_async_task
+    data:
+      task: "{{ workflow }}"
+      parameters:
+        query: "{{ query }}"
+      callback_entity: "tts.piper"
+
+# --- END SPEC CONFIGURATION ---
+
+# ==========================================================================
+# EXPOSED ENTITIES
+# ==========================================================================
+#
+# In the integration settings, configure "Exposed Entities" to limit what
+# the LLM can see and control. This improves performance and security.
+#
+# Recommended entity patterns to expose:
+#   - light.*
+#   - switch.*
+#   - climate.*
+#   - lock.*
+#   - cover.* (for garage doors, blinds)
+#   - media_player.*
+#   - sensor.temperature*
+#   - sensor.humidity*
+#   - binary_sensor.door*
+#   - binary_sensor.window*
+#   - binary_sensor.motion*
+#   - input_boolean.*
+#   - scene.*
+#   - script.* (but only the tool scripts)
+#
+# Do NOT expose:
+#   - High-frequency sensors (weather forecast details, energy monitors)
+#   - System entities (update.*, automation.*)
+#   - Sensitive entities (camera.*, person.* location details)
+
+# ==========================================================================
+# CONTEXT INJECTION
+# ==========================================================================
+#
+# Use the "Additional Context" field to inject dynamic state information.
+# This helps the LLM understand the current environment.
+
+# Example context template (add to "Additional Context" field):
+#
+# Current ship time: {{ now().strftime('%H%M hours on %A, %B %d') }}
+# Time of day: {{ states('sensor.time_of_day') }}
+# Crew aboard: {{ states('sensor.home_status') }}
+# 
+# Active alerts:
+# {% if is_state('input_boolean.red_alert', 'on') %}- RED ALERT ACTIVE{% endif %}
+# {% if is_state('input_boolean.do_not_disturb', 'on') %}- Do Not Disturb enabled{% endif %}
+# {% if is_state('input_boolean.away_mode', 'on') %}- Away Mode active{% endif %}
+#
+# Recent activity:
+# Last voice command: {{ states('input_text.last_voice_command') }}
