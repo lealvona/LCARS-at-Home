@@ -1,0 +1,328 @@
+{
+  "name": "LCARS Voice Command Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-command",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Voice Command Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "voice-command"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "user-text",
+              "name": "user_text",
+              "value": "={{ $json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "conversation-id",
+              "name": "conversation_id",
+              "value": "={{ $json.body.conversation_id }}",
+              "type": "string"
+            },
+            {
+              "id": "device-id",
+              "name": "device_id",
+              "value": "={{ $json.body.device_id }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-fields",
+      "name": "Extract Request Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.HA_URL + '/api/states' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-ha-states",
+      "name": "Get Home Assistant States",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter and format Home Assistant states for context injection\nconst states = $input.all()[0].json;\nconst userText = $('Extract Request Fields').item.json.user_text;\nconst deviceId = $('Extract Request Fields').item.json.device_id;\n\n// Define which entity types to include in context\nconst relevantDomains = ['light', 'switch', 'climate', 'lock', 'cover', 'sensor', 'binary_sensor'];\nconst relevantSensorTypes = ['temperature', 'humidity', 'motion', 'door', 'window', 'occupancy'];\n\n// Filter to relevant entities\nconst relevantStates = states.filter(entity => {\n  const domain = entity.entity_id.split('.')[0];\n  if (!relevantDomains.includes(domain)) return false;\n  \n  // For sensors, only include specific types\n  if (domain === 'sensor' || domain === 'binary_sensor') {\n    const deviceClass = entity.attributes?.device_class || '';\n    const entityId = entity.entity_id.toLowerCase();\n    return relevantSensorTypes.some(type => \n      deviceClass.includes(type) || entityId.includes(type)\n    );\n  }\n  return true;\n});\n\n// Format into a concise context string\nconst contextLines = relevantStates.map(entity => {\n  const name = entity.attributes?.friendly_name || entity.entity_id;\n  const state = entity.state;\n  let details = '';\n  \n  if (entity.attributes?.brightness) {\n    details = ` (${Math.round(entity.attributes.brightness / 255 * 100)}%)`;\n  }\n  if (entity.attributes?.current_temperature) {\n    details = ` (current: ${entity.attributes.current_temperature}°)`;\n  }\n  \n  return `- ${name}: ${state}${details}`;\n});\n\n// Build the context block\nconst currentHour = new Date().getHours();\nlet timeOfDay = 'night';\nif (currentHour >= 6 && currentHour < 12) timeOfDay = 'morning';\nelse if (currentHour >= 12 && currentHour < 18) timeOfDay = 'afternoon';\nelse if (currentHour >= 18 && currentHour < 22) timeOfDay = 'evening';\n\nconst context = `\n=== CURRENT SHIP STATUS ===\nTime: ${new Date().toLocaleTimeString('en-US', {hour12: false})} hours (${timeOfDay})\nDevice: ${deviceId || 'unknown'}\n\n=== SYSTEM STATES ===\n${contextLines.join('\\n')}\n`;\n\nreturn {\n  user_text: userText,\n  context: context,\n  device_id: deviceId,\n  entity_count: relevantStates.length\n};"
+      },
+      "id": "build-context",
+      "name": "Build LLM Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.user_text }}",
+        "options": {
+          "systemMessage": "You are the Computer, the central AI system aboard this vessel. You are modeled after the LCARS interface from Star Trek. You are logical, efficient, and concise.\n\nRESPONSE RULES:\n- Address the user as \"Commander\"\n- Use these acknowledgments: \"Affirmative\", \"Acknowledged\", \"Unable to comply\", \"Processing\"\n- Never use phrases like \"I'm sorry\" or \"I hope you're doing well\"\n- Be extremely concise - no filler words\n- Use 24-hour time format (e.g., \"1400 hours\")\n- Confirm actions clearly: \"Task complete. [what was done]\"\n\nCURRENT CONTEXT:\n{{ $json.context }}\n\nYou have tools available to control the home. Use them when the Commander requests actions. For status queries, use the context provided above."
+        }
+      },
+      "id": "ai-agent",
+      "name": "LCARS AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        }
+      },
+      "id": "ollama-model",
+      "name": "Ollama Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [900, 520],
+      "credentials": {
+        "ollamaApi": {
+          "id": "ollama-credentials",
+          "name": "Ollama API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "control_light",
+        "description": "Turn a light on, off, or adjust brightness. Use entity_id like 'light.living_room'.",
+        "workflowId": {
+          "__rl": true,
+          "value": "={{ $workflow.id }}",
+          "mode": "id"
+        },
+        "specifyInputSchema": true,
+        "jsonSchemaExample": "{\n  \"entity_id\": \"light.living_room\",\n  \"action\": \"on\",\n  \"brightness_pct\": 75\n}"
+      },
+      "id": "tool-light",
+      "name": "Light Control Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 1.2,
+      "position": [1100, 520]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"response\": $json.output, \"conversation_id\": $('Extract Request Fields').item.json.conversation_id } }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tool/control-light",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "tool-webhook-light",
+      "name": "Light Tool Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 700],
+      "webhookId": "tool-control-light"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/light/' + ($json.body.action === 'off' ? 'turn_off' : 'turn_on') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"entity_id\": $json.body.entity_id,\n  \"brightness_pct\": $json.body.brightness_pct || 100\n} }}",
+        "options": {}
+      },
+      "id": "ha-light-service",
+      "name": "Call HA Light Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 700],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Light \" + $('Light Tool Webhook').item.json.body.entity_id + \" set to \" + $('Light Tool Webhook').item.json.body.action } }}",
+        "options": {}
+      },
+      "id": "respond-light-tool",
+      "name": "Respond Light Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 700]
+    }
+  ],
+  "connections": {
+    "Voice Command Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Request Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Home Assistant States",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Request Fields": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Home Assistant States": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Context": {
+      "main": [
+        [
+          {
+            "node": "LCARS AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LCARS AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "LCARS AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Light Control Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "LCARS AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Light Tool Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call HA Light Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call HA Light Service": {
+      "main": [
+        [
+          {
+            "node": "Respond Light Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "LCARS",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Voice Assistant",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "instanceId": "lcars-computer-instance"
+  }
+}

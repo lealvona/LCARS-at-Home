@@ -1,0 +1,358 @@
+{
+  "name": "LCARS Deep Research Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deep-research",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-research",
+      "name": "Research Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "deep-research-trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "query",
+              "name": "research_query",
+              "value": "={{ $json.body.query }}",
+              "type": "string"
+            },
+            {
+              "id": "callback",
+              "name": "callback_method",
+              "value": "={{ $json.body.callback || 'tts' }}",
+              "type": "string"
+            },
+            {
+              "id": "request_id",
+              "name": "request_id",
+              "value": "={{ $now.format('yyyyMMddHHmmss') }}-{{ Math.random().toString(36).substring(7) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-params",
+      "name": "Extract Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"processing\",\n  \"message\": \"Accessing long-range sensors. Processing your request, Commander.\",\n  \"request_id\": \"{{ $json.request_id }}\",\n  \"estimated_time\": \"30-60 seconds\"\n}",
+        "options": {}
+      },
+      "id": "immediate-response",
+      "name": "Immediate Acknowledgment",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Research Query: {{ $('Extract Parameters').item.json.research_query }}\n\nYou are a research assistant for the LCARS Computer system. Your task is to:\n\n1. Analyze the research query\n2. Break it down into specific search topics\n3. Use web search to gather current information\n4. Synthesize the findings into a comprehensive briefing\n\nProvide your findings in a format suitable for verbal announcement (concise but thorough).\n\nImportant: Format your final response as a \"Starfleet Briefing\" - professional, factual, and organized.",
+        "options": {
+          "systemMessage": "You are a research agent for the LCARS Computer system. You have access to web search capabilities. Your role is to gather, analyze, and synthesize information from multiple sources into clear, actionable intelligence briefings.\n\nWhen researching:\n1. Use multiple search queries to get comprehensive coverage\n2. Cross-reference information from different sources\n3. Note any conflicting information\n4. Prioritize recent and authoritative sources\n5. Format findings for verbal announcement\n\nYour output should be:\n- Factual and objective\n- Organized by topic\n- Suitable for text-to-speech delivery\n- Under 500 words for verbal briefings"
+        }
+      },
+      "id": "research-agent",
+      "name": "Research AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        }
+      },
+      "id": "ollama-research",
+      "name": "Ollama Research Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [900, 600],
+      "credentials": {
+        "ollamaApi": {
+          "id": "ollama-credentials",
+          "name": "Ollama API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "web_search",
+        "description": "Search the web for current information on a topic"
+      },
+      "id": "search-tool",
+      "name": "Web Search Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "typeVersion": 1,
+      "position": [1100, 600],
+      "credentials": {
+        "serpApi": {
+          "id": "serp-api",
+          "name": "SerpAPI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the research output for the LCARS Computer\nconst agentOutput = $input.first().json.output;\nconst requestId = $('Extract Parameters').item.json.request_id;\nconst query = $('Extract Parameters').item.json.research_query;\n\n// Create a formatted briefing\nconst briefing = `\nResearch Briefing - Request ${requestId}\nQuery: ${query}\n\n${agentOutput}\n\nEnd of briefing.\n`.trim();\n\n// Create a shorter TTS version (first 500 chars or first paragraph)\nlet ttsVersion = agentOutput;\nif (ttsVersion.length > 500) {\n  // Find a good breaking point\n  const breakPoint = ttsVersion.lastIndexOf('.', 500);\n  if (breakPoint > 200) {\n    ttsVersion = ttsVersion.substring(0, breakPoint + 1) + ' Full report available in the ships log.';\n  } else {\n    ttsVersion = ttsVersion.substring(0, 500) + '... Full report available in the ships log.';\n  }\n}\n\nreturn {\n  request_id: requestId,\n  query: query,\n  full_briefing: briefing,\n  tts_briefing: ttsVersion,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "format-output",
+      "name": "Format Research Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-callback",
+              "leftValue": "={{ $('Extract Parameters').item.json.callback_method }}",
+              "rightValue": "tts",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-callback-type",
+      "name": "TTS or Notification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/tts/speak' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"entity_id\": \"tts.piper\",\n  \"media_player_entity_id\": \"media_player.whole_house\",\n  \"message\": \"Commander, research complete. {{ $json.tts_briefing.replace(/\"/g, '\\\\\"') }}\"\n}",
+        "options": {}
+      },
+      "id": "announce-results",
+      "name": "Announce via TTS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/notify/mobile_app' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"📊 Research Complete\",\n  \"message\": \"{{ $json.full_briefing.substring(0, 1000) }}\",\n  \"data\": {\n    \"sticky\": true,\n    \"tag\": \"research-{{ $json.request_id }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "notify-results",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "filePath": "/files/research_logs/briefings.jsonl",
+        "options": {}
+      },
+      "id": "log-research",
+      "name": "Log to File",
+      "type": "n8n-nodes-base.writeFile",
+      "typeVersion": 1,
+      "position": [1780, 400],
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "Research Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Parameters": {
+      "main": [
+        [
+          {
+            "node": "Immediate Acknowledgment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Immediate Acknowledgment": {
+      "main": [
+        [
+          {
+            "node": "Research AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Research Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Research AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Research AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Research Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Research Output": {
+      "main": [
+        [
+          {
+            "node": "TTS or Notification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TTS or Notification?": {
+      "main": [
+        [
+          {
+            "node": "Announce via TTS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Announce via TTS": {
+      "main": [
+        [
+          {
+            "node": "Log to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Notification": {
+      "main": [
+        [
+          {
+            "node": "Log to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "LCARS",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Research",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Async",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "instanceId": "lcars-computer-instance"
+  }
+}

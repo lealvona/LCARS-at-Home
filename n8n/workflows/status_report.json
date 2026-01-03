@@ -1,0 +1,264 @@
+{
+  "name": "LCARS Ship Status Report",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "status-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-status",
+      "name": "Status Report Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "status-report-trigger"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.HA_URL + '/api/states' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-all-states",
+      "name": "Get All States",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// LCARS Ship Status Report Generator\n// Processes all Home Assistant states into a structured status report\n\nconst states = $input.all()[0].json;\nconst requestType = $('Status Report Webhook').item.json.body?.type || 'full';\n\n// Helper function to get friendly name\nconst getName = (entity) => entity.attributes?.friendly_name || entity.entity_id.split('.')[1].replace(/_/g, ' ');\n\n// Categorize entities\nconst categories = {\n  environmental: {\n    title: 'ENVIRONMENTAL CONTROLS',\n    entities: states.filter(e => \n      ['climate', 'fan', 'humidifier'].includes(e.entity_id.split('.')[0]) ||\n      (e.attributes?.device_class && ['temperature', 'humidity', 'aqi', 'co2'].includes(e.attributes.device_class))\n    )\n  },\n  lighting: {\n    title: 'LIGHTING SYSTEMS',\n    entities: states.filter(e => e.entity_id.startsWith('light.'))\n  },\n  security: {\n    title: 'SECURITY STATUS',\n    entities: states.filter(e => \n      e.entity_id.startsWith('lock.') ||\n      e.entity_id.startsWith('alarm_control_panel.') ||\n      (e.attributes?.device_class && ['door', 'window', 'opening', 'motion', 'occupancy'].includes(e.attributes.device_class))\n    )\n  },\n  energy: {\n    title: 'POWER SYSTEMS',\n    entities: states.filter(e => \n      (e.attributes?.device_class && ['power', 'energy', 'battery'].includes(e.attributes.device_class)) ||\n      e.entity_id.includes('power') || e.entity_id.includes('energy')\n    )\n  },\n  media: {\n    title: 'ENTERTAINMENT SYSTEMS',\n    entities: states.filter(e => e.entity_id.startsWith('media_player.'))\n  },\n  crew: {\n    title: 'CREW STATUS',\n    entities: states.filter(e => e.entity_id.startsWith('person.') || e.entity_id.startsWith('device_tracker.'))\n  }\n};\n\n// Generate stardate (Star Trek style date)\nconst now = new Date();\nconst year = now.getFullYear() - 2323; // TNG era offset\nconst dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);\nconst stardate = (year * 1000 + dayOfYear).toFixed(1);\n\n// Build report sections\nconst sections = [];\n\n// Environmental\nif (categories.environmental.entities.length > 0) {\n  const tempSensors = categories.environmental.entities.filter(e => e.attributes?.device_class === 'temperature');\n  const humiditySensors = categories.environmental.entities.filter(e => e.attributes?.device_class === 'humidity');\n  const climates = categories.environmental.entities.filter(e => e.entity_id.startsWith('climate.'));\n  \n  let envStatus = [];\n  if (tempSensors.length > 0) {\n    const avgTemp = tempSensors.reduce((sum, e) => sum + parseFloat(e.state), 0) / tempSensors.length;\n    envStatus.push(`Temperature: ${avgTemp.toFixed(1)}°F average`);\n  }\n  if (humiditySensors.length > 0) {\n    const avgHumidity = humiditySensors.reduce((sum, e) => sum + parseFloat(e.state), 0) / humiditySensors.length;\n    envStatus.push(`Humidity: ${avgHumidity.toFixed(0)}%`);\n  }\n  climates.forEach(c => {\n    envStatus.push(`${getName(c)}: ${c.state}${c.attributes?.current_temperature ? ` (${c.attributes.current_temperature}°F)` : ''}`);\n  });\n  \n  sections.push({\n    title: 'ENVIRONMENTAL CONTROLS',\n    status: envStatus.length > 0 ? 'NOMINAL' : 'NO DATA',\n    details: envStatus\n  });\n}\n\n// Lighting\nconst lights = categories.lighting.entities;\nconst lightsOn = lights.filter(l => l.state === 'on');\nsections.push({\n  title: 'LIGHTING SYSTEMS',\n  status: lightsOn.length === 0 ? 'ALL OFF' : `${lightsOn.length}/${lights.length} ACTIVE`,\n  details: lightsOn.map(l => `${getName(l)}: ${l.attributes?.brightness ? Math.round(l.attributes.brightness / 255 * 100) + '%' : 'ON'}`)\n});\n\n// Security\nconst locks = categories.security.entities.filter(e => e.entity_id.startsWith('lock.'));\nconst doors = categories.security.entities.filter(e => e.attributes?.device_class === 'door');\nconst windows = categories.security.entities.filter(e => e.attributes?.device_class === 'window');\nconst motion = categories.security.entities.filter(e => ['motion', 'occupancy'].includes(e.attributes?.device_class));\n\nconst unlockedLocks = locks.filter(l => l.state !== 'locked');\nconst openDoors = doors.filter(d => d.state === 'on');\nconst openWindows = windows.filter(w => w.state === 'on');\nconst activeMotion = motion.filter(m => m.state === 'on');\n\nlet securityStatus = 'GREEN';\nif (unlockedLocks.length > 0 || openDoors.length > 0) securityStatus = 'YELLOW';\n\nsections.push({\n  title: 'SECURITY STATUS',\n  status: securityStatus,\n  details: [\n    `Locks: ${locks.length - unlockedLocks.length}/${locks.length} secured`,\n    `Entry points: ${openDoors.length + openWindows.length} open`,\n    `Motion sensors: ${activeMotion.length} active`,\n    ...unlockedLocks.map(l => `⚠ ${getName(l)}: UNLOCKED`),\n    ...openDoors.map(d => `⚠ ${getName(d)}: OPEN`)\n  ]\n});\n\n// Crew Status\nconst people = categories.crew.entities.filter(e => e.entity_id.startsWith('person.'));\nconst peopleHome = people.filter(p => p.state === 'home');\nsections.push({\n  title: 'CREW STATUS',\n  status: `${peopleHome.length}/${people.length} ABOARD`,\n  details: people.map(p => `${getName(p)}: ${p.state === 'home' ? 'Aboard' : p.state}`)\n});\n\n// Media\nconst mediaPlayers = categories.media.entities;\nconst activePlayers = mediaPlayers.filter(m => !['off', 'unavailable', 'idle'].includes(m.state));\nif (mediaPlayers.length > 0) {\n  sections.push({\n    title: 'ENTERTAINMENT SYSTEMS',\n    status: activePlayers.length > 0 ? `${activePlayers.length} ACTIVE` : 'STANDBY',\n    details: activePlayers.map(m => `${getName(m)}: ${m.state}${m.attributes?.media_title ? ` - ${m.attributes.media_title}` : ''}`)\n  });\n}\n\n// Power (if available)\nconst batteries = categories.energy.entities.filter(e => e.attributes?.device_class === 'battery' && !isNaN(parseFloat(e.state)));\nconst lowBatteries = batteries.filter(b => parseFloat(b.state) < 20);\nif (batteries.length > 0 || lowBatteries.length > 0) {\n  sections.push({\n    title: 'POWER SYSTEMS',\n    status: lowBatteries.length > 0 ? 'ATTENTION REQUIRED' : 'NOMINAL',\n    details: [\n      `Monitored devices: ${batteries.length}`,\n      ...lowBatteries.map(b => `⚠ ${getName(b)}: ${b.state}% - LOW POWER`)\n    ]\n  });\n}\n\n// Build final report\nconst report = {\n  stardate: stardate,\n  timestamp: now.toISOString(),\n  vessel: 'USS Enterprise',\n  overall_status: securityStatus === 'GREEN' && lowBatteries.length === 0 ? 'ALL SYSTEMS NOMINAL' : 'ATTENTION REQUIRED',\n  sections: sections\n};\n\n// Generate LCARS-style text report\nlet textReport = `STATUS REPORT - STARDATE ${stardate}\\n`;\ntextReport += `=================================\\n\\n`;\ntextReport += `Overall: ${report.overall_status}\\n\\n`;\n\nsections.forEach(section => {\n  textReport += `[${section.title}]\\n`;\n  textReport += `Status: ${section.status}\\n`;\n  section.details.forEach(d => {\n    textReport += `  ${d}\\n`;\n  });\n  textReport += `\\n`;\n});\n\nreturn {\n  json: report,\n  text: textReport,\n  speech: `Status report, stardate ${stardate}. ${report.overall_status}. ${peopleHome.length} crew members aboard. ${lightsOn.length} lighting systems active. Security status ${securityStatus}. ${lowBatteries.length > 0 ? lowBatteries.length + ' devices require power. ' : ''}End report.`\n};"
+      },
+      "id": "build-report",
+      "name": "Build Status Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-format",
+              "leftValue": "={{ $('Status Report Webhook').item.json.body?.format }}",
+              "rightValue": "speech",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-format",
+      "name": "Speech or JSON?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"response\": $json.speech, \"type\": \"speech\", \"stardate\": $json.json.stardate } }}",
+        "options": {}
+      },
+      "id": "respond-speech",
+      "name": "Respond Speech",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.json }}",
+        "options": {}
+      },
+      "id": "respond-json",
+      "name": "Respond JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "quick-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-quick",
+      "name": "Quick Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 600],
+      "webhookId": "quick-status-trigger"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.HA_URL + '/api/states' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-quick-states",
+      "name": "Get States (Quick)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quick Status Summary for voice responses\nconst states = $input.all()[0].json;\n\nconst lights = states.filter(e => e.entity_id.startsWith('light.'));\nconst lightsOn = lights.filter(l => l.state === 'on').length;\n\nconst locks = states.filter(e => e.entity_id.startsWith('lock.'));\nconst locksSecured = locks.filter(l => l.state === 'locked').length;\n\nconst people = states.filter(e => e.entity_id.startsWith('person.'));\nconst peopleHome = people.filter(p => p.state === 'home').length;\n\nconst doors = states.filter(e => e.attributes?.device_class === 'door');\nconst doorsOpen = doors.filter(d => d.state === 'on').length;\n\n// Get temperature if available\nconst tempSensors = states.filter(e => e.attributes?.device_class === 'temperature');\nlet tempInfo = '';\nif (tempSensors.length > 0) {\n  const avgTemp = tempSensors.reduce((sum, e) => sum + parseFloat(e.state), 0) / tempSensors.length;\n  tempInfo = `Temperature ${avgTemp.toFixed(0)} degrees. `;\n}\n\n// Determine security status\nlet securityPhrase = 'All entry points secured.';\nif (doorsOpen > 0 || locksSecured < locks.length) {\n  const issues = [];\n  if (doorsOpen > 0) issues.push(`${doorsOpen} door${doorsOpen > 1 ? 's' : ''} open`);\n  if (locksSecured < locks.length) issues.push(`${locks.length - locksSecured} lock${(locks.length - locksSecured) > 1 ? 's' : ''} unsecured`);\n  securityPhrase = `Security alert: ${issues.join(', ')}.`;\n}\n\nconst speech = `All systems operational. ${peopleHome} crew member${peopleHome !== 1 ? 's' : ''} aboard. ${lightsOn} light${lightsOn !== 1 ? 's' : ''} active. ${tempInfo}${securityPhrase}`;\n\nreturn {\n  speech: speech,\n  lights_on: lightsOn,\n  lights_total: lights.length,\n  locks_secured: locksSecured,\n  locks_total: locks.length,\n  people_home: peopleHome,\n  people_total: people.length,\n  doors_open: doorsOpen\n};"
+      },
+      "id": "build-quick-status",
+      "name": "Build Quick Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"response\": $json.speech, \"data\": $json } }}",
+        "options": {}
+      },
+      "id": "respond-quick",
+      "name": "Respond Quick Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 600]
+    }
+  ],
+  "connections": {
+    "Status Report Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get All States",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All States": {
+      "main": [
+        [
+          {
+            "node": "Build Status Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Report": {
+      "main": [
+        [
+          {
+            "node": "Speech or JSON?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speech or JSON?": {
+      "main": [
+        [
+          {
+            "node": "Respond Speech",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quick Status Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get States (Quick)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get States (Quick)": {
+      "main": [
+        [
+          {
+            "node": "Build Quick Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Quick Status": {
+      "main": [
+        [
+          {
+            "node": "Respond Quick Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "LCARS",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Status",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 2,
+  "meta": {
+    "instanceId": "lcars-computer-instance"
+  }
+}

@@ -1,0 +1,383 @@
+{
+  "name": "LCARS Red Alert Protocol",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "red-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-red-alert",
+      "name": "Red Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "red-alert-trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-action",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "activate",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-activate",
+      "name": "Activate or Cancel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/input_boolean/turn_on' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"entity_id\": \"input_boolean.red_alert\" }",
+        "options": {}
+      },
+      "id": "set-red-alert-flag",
+      "name": "Set Red Alert Flag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/light/turn_on' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"entity_id\": \"all\",\n  \"color_name\": \"red\",\n  \"brightness\": 255,\n  \"effect\": \"pulse\"\n}",
+        "options": {}
+      },
+      "id": "lights-red",
+      "name": "Set Lights to Red",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/lock/lock' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"entity_id\": \"all\" }",
+        "options": {}
+      },
+      "id": "lock-doors",
+      "name": "Lock All Doors",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/notify/mobile_app' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"title\": \"🚨 RED ALERT\",\n  \"message\": \"Red Alert protocol activated. All doors secured. Emergency lighting engaged.\",\n  \"data\": {\n    \"priority\": \"high\",\n    \"ttl\": 0,\n    \"channel\": \"alarm\"\n  }\n}",
+        "options": {}
+      },
+      "id": "send-notification",
+      "name": "Send Alert Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/tts/speak' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"entity_id\": \"tts.piper\",\n  \"media_player_entity_id\": \"media_player.whole_house\",\n  \"message\": \"Red Alert. Red Alert. All hands to stations. Security protocols engaged.\"\n}",
+        "options": {}
+      },
+      "id": "announce-alert",
+      "name": "Voice Announcement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"activated\",\n  \"message\": \"Red Alert protocol engaged. All security measures active.\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-activated",
+      "name": "Respond Activated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/input_boolean/turn_off' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"entity_id\": \"input_boolean.red_alert\" }",
+        "options": {}
+      },
+      "id": "clear-red-alert-flag",
+      "name": "Clear Red Alert Flag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/light/turn_on' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"entity_id\": \"all\",\n  \"color_name\": \"warm_white\",\n  \"brightness_pct\": 80,\n  \"effect\": \"none\"\n}",
+        "options": {}
+      },
+      "id": "restore-lights",
+      "name": "Restore Normal Lighting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HA_URL + '/api/services/tts/speak' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"entity_id\": \"tts.piper\",\n  \"media_player_entity_id\": \"media_player.whole_house\",\n  \"message\": \"Red Alert cancelled. All systems returning to normal operation.\"\n}",
+        "options": {}
+      },
+      "id": "announce-cancel",
+      "name": "Announce Cancellation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "home-assistant-auth",
+          "name": "Home Assistant Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"status\": \"cancelled\",\n  \"message\": \"Red Alert cancelled. Systems restored to normal.\",\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-cancelled",
+      "name": "Respond Cancelled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1340, 600]
+    }
+  ],
+  "connections": {
+    "Red Alert Webhook": {
+      "main": [
+        [
+          {
+            "node": "Activate or Cancel?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Activate or Cancel?": {
+      "main": [
+        [
+          {
+            "node": "Set Red Alert Flag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Red Alert Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Red Alert Flag": {
+      "main": [
+        [
+          {
+            "node": "Set Lights to Red",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lock All Doors",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Alert Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lock All Doors": {
+      "main": [
+        [
+          {
+            "node": "Voice Announcement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice Announcement": {
+      "main": [
+        [
+          {
+            "node": "Respond Activated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Red Alert Flag": {
+      "main": [
+        [
+          {
+            "node": "Restore Normal Lighting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Normal Lighting": {
+      "main": [
+        [
+          {
+            "node": "Announce Cancellation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Announce Cancellation": {
+      "main": [
+        [
+          {
+            "node": "Respond Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "LCARS",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Emergency",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "meta": {
+    "instanceId": "lcars-computer-instance"
+  }
+}
