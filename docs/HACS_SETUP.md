@@ -84,12 +84,12 @@ Open your terminal/command prompt and run:
 
 **Linux/macOS:**
 ```bash
-docker exec -it homeassistant bash -c "wget -O - https://get.hacs.xyz | bash -"
+docker exec -it LCARS-homeassistant bash -c "wget -O - https://get.hacs.xyz | bash -"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-docker exec -it homeassistant bash -c "wget -O - https://get.hacs.xyz | bash -"
+docker exec -it LCARS-homeassistant bash -c "wget -O - https://get.hacs.xyz | bash -"
 ```
 
 #### Step 2: Restart Container
@@ -123,7 +123,7 @@ Same as Method 1, Step 5 above.
 
 **Solution:**
 ```bash
-docker exec -it homeassistant bash -c "apk add wget && wget -O - https://get.hacs.xyz | bash -"
+docker exec -it LCARS-homeassistant bash -c "apk add wget && wget -O - https://get.hacs.xyz | bash -"
 ```
 
 ---

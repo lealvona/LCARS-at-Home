@@ -359,7 +359,7 @@ Use the complete LCARS configuration from `homeassistant/config/` which includes
 **Solution:**
 1. Check what models you have:
    ```bash
-   docker exec ollama ollama list
+  docker exec LCARS-ollama ollama list
    ```
 2. Update the Model field in Extended OpenAI config to match exactly
 3. Model names are case-sensitive!

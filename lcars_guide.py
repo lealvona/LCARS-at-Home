@@ -1937,7 +1937,7 @@ elif step_name == "Integration":
         """)
 
         command_box("""# Execute inside the Home Assistant container
-docker exec -it homeassistant bash -c "wget -O - https://get.hacs.xyz | bash -"
+    docker exec -it LCARS-homeassistant bash -c \"wget -O - https://get.hacs.xyz | bash -\"
 
 # Then restart Home Assistant
 cd docker

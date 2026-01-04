@@ -58,7 +58,7 @@ ollama:
 3. **Verify GPU access**:
 
 ```bash
-docker exec ollama nvidia-smi
+docker exec LCARS-ollama nvidia-smi
 ```
 
 ### AMD GPU Setup (ROCm)
