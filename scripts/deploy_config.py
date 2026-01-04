@@ -413,6 +413,28 @@ def generate_docker_compose_override(services: Dict[str, ServiceConfig]) -> str:
         yaml_content += "    profiles:\n"
         yaml_content += "      - disabled\n"
 
+    # Handle n8n dependencies when postgres or redis are disabled
+    # If postgres or redis are using existing services, we need to remove them
+    # from n8n's depends_on to avoid "undefined service" errors
+    if 'postgres' in disabled_services or 'redis' in disabled_services:
+        yaml_content += "  n8n:\n"
+
+        # Calculate remaining dependencies
+        n8n_dependencies = []
+        if 'postgres' not in disabled_services:
+            n8n_dependencies.append('postgres')
+        if 'redis' not in disabled_services:
+            n8n_dependencies.append('redis')
+
+        # Override depends_on
+        if n8n_dependencies:
+            yaml_content += "    depends_on:\n"
+            for dep in n8n_dependencies:
+                yaml_content += f"      - {dep}\n"
+        else:
+            # If all dependencies are disabled, set empty depends_on
+            yaml_content += "    depends_on: []\n"
+
     # Add port overrides
     for override in port_overrides:
         yaml_content += f"  {override['service']}:\n"
