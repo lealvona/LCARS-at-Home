@@ -23,7 +23,7 @@ services:
   # It handles the Wyoming protocol for voice satellites and
   # routes conversation to the LLM via Extended OpenAI Conversation.
   homeassistant:
-    container_name: homeassistant
+    container_name: LCARS-homeassistant
     image: ghcr.io/home-assistant/home-assistant:stable
     restart: unless-stopped
     privileged: true
@@ -47,7 +47,7 @@ services:
   # Using faster-whisper for GPU acceleration and reduced latency.
   # The 'medium' model balances accuracy and speed for voice commands.
   whisper:
-    container_name: whisper
+    container_name: LCARS-whisper
     image: lscr.io/linuxserver/faster-whisper:latest
     restart: unless-stopped
     networks:
@@ -76,7 +76,7 @@ services:
   # Piper runs entirely offline and produces high-quality speech.
   # The 'amy' voice provides a calm, authoritative tone similar to LCARS.
   piper:
-    container_name: piper
+    container_name: LCARS-piper
     image: lscr.io/linuxserver/piper:latest
     restart: unless-stopped
     networks:
@@ -99,7 +99,7 @@ services:
   # Listens for "Computer" to trigger the voice pipeline.
   # Runs on the server to offload processing from satellites.
   openwakeword:
-    container_name: openwakeword
+    container_name: LCARS-openwakeword
     image: rhasspy/wyoming-openwakeword:latest
     restart: unless-stopped
     networks:
@@ -121,7 +121,7 @@ services:
   # It implements the "Fire-and-Forget" pattern for async tasks and
   # provides visual debugging of automation flows.
   n8n:
-    container_name: n8n
+    container_name: LCARS-n8n
     image: docker.n8n.io/n8nio/n8n:latest
     restart: unless-stopped
     networks:
@@ -170,7 +170,7 @@ services:
   # Runs open-source models like Llama 3.1, Mistral, etc.
   # GPU acceleration is critical for sub-second response times.
   ollama:
-    container_name: ollama
+    container_name: LCARS-ollama
     image: ollama/ollama:latest
     restart: unless-stopped
     networks:
@@ -196,7 +196,7 @@ services:
   # Provides the cognitive interface, persona management, and
   # Retrieval-Augmented Generation for the "Ship's Database".
   open-webui:
-    container_name: open-webui
+    container_name: LCARS-open-webui
     image: ghcr.io/open-webui/open-webui:main
     restart: unless-stopped
     networks:
@@ -223,7 +223,7 @@ services:
   # Used by n8n for workflow storage and execution history.
   # Provides reliability and ACID compliance for automation data.
   postgres:
-    container_name: postgres
+    container_name: LCARS-postgres
     image: postgres:16-alpine
     restart: unless-stopped
     networks:
@@ -244,7 +244,7 @@ services:
   # Used for async task management and session caching.
   # Essential for the "Fire-and-Forget" pattern.
   redis:
-    container_name: redis
+    container_name: LCARS-redis
     image: redis:7-alpine
     restart: unless-stopped
     networks:
