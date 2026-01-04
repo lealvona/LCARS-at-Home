@@ -1,0 +1,24 @@
+[project]
+name = "lcars-computer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.52.2",
+]
+
+[project.scripts]
+lcars-guide = "lcars_computer.cli:guide"
+lcars-setup-env = "lcars_computer.cli:setup_env"
+lcars-health-check = "lcars_computer.cli:health_check"
+lcars-backup = "lcars_computer.cli:backup"
+lcars-update = "lcars_computer.cli:update"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lcars_computer*"]
