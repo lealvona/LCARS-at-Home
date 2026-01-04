@@ -95,3 +95,4 @@ certs/
 # Keep placeholder files
 # ==========================================================================
 !.gitkeep
+settings.local.json
