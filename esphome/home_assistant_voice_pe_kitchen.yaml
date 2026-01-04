@@ -1,0 +1,15 @@
+# Home Assistant Voice Preview Edition (HAVPE) - Kitchen
+#
+# Second device example. Same upstream firmware package; unique name/friendly_name.
+
+substitutions:
+  name: "voice-pe-kitchen"
+  friendly_name: "Kitchen Voice Terminal"
+
+packages:
+  havpe_factory: github://esphome/home-assistant-voice-pe/home-assistant-voice.factory.yaml@dev
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false

@@ -1,0 +1,16 @@
+# Home Assistant Voice Preview Edition (HAVPE) - Single-device template
+#
+# Copy this file, change `name` and `friendly_name`, and flash.
+# If you later add a second unit, create a second YAML with a different `name`.
+
+substitutions:
+  name: "voice-pe"
+  friendly_name: "Voice Terminal"
+
+packages:
+  havpe_factory: github://esphome/home-assistant-voice-pe/home-assistant-voice.factory.yaml@dev
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false

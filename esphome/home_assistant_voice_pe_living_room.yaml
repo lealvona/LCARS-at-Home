@@ -1,0 +1,32 @@
+# Home Assistant Voice Preview Edition (HAVPE) - Living Room
+#
+# This is a minimal *wrapper* config that pulls the upstream, hardware-correct
+# firmware maintained by ESPHome/Home Assistant, then overrides only the parts
+# that must be unique per device (name/friendly_name).
+#
+# Upstream firmware repo:
+#   https://github.com/esphome/home-assistant-voice-pe
+#
+# Notes:
+# - The upstream config includes the correct pin mapping and required external
+#   components for the Voice Preview Edition (XMOS voice kit, mic array, LED ring,
+#   dial, etc.).
+# - It uses on-device microWakeWord (default models include "okay_nabu", "hey_jarvis",
+#   and "hey_mycroft"). A custom "Computer" wake word would require training and
+#   adding a microWakeWord model.
+# - The upstream config intentionally supports provisioning (Improv/BLE) and does
+#   not require embedding WiFi credentials in this YAML.
+
+substitutions:
+  name: "voice-pe-living-room"
+  friendly_name: "Living Room Voice Terminal"
+
+packages:
+  # Factory config includes provisioning + OTA manifest wiring.
+  havpe_factory: github://esphome/home-assistant-voice-pe/home-assistant-voice.factory.yaml@dev
+
+# Ensure each device has a stable, distinct name in Home Assistant.
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  name_add_mac_suffix: false
