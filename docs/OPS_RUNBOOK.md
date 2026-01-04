@@ -6,6 +6,10 @@ Prerequisites:
 
 ## Start / Stop
 
+## Installer UI
+
+- Run the interactive guide: `streamlit run lcars_guide.py`
+
 - Start (Linux): `cd docker && docker compose up -d`
 - Start (Docker Desktop: Windows/macOS): `cd docker && docker compose -f docker-compose.desktop.yml up -d`
 - Stop: `cd docker && docker compose down`
