@@ -424,8 +424,8 @@ setup_ollama_model() {
     done
     
     log INFO "Pulling llama3.1:8b model (this will take several minutes)..."
-    docker exec ollama ollama pull llama3.1:8b || {
-        log WARN "Failed to pull model. You can try manually: docker exec ollama ollama pull llama3.1:8b"
+    docker exec LCARS-ollama ollama pull llama3.1:8b || {
+        log WARN "Failed to pull model. You can try manually: docker exec LCARS-ollama ollama pull llama3.1:8b"
     }
     
     log INFO "Model setup complete."
