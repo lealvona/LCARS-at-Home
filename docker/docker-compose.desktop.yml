@@ -1,0 +1,192 @@
+# Docker Desktop compose (Windows/macOS)
+#
+# Docker Desktop has limitations for `network_mode: host`. This file defines the
+# full LCARS stack but runs Home Assistant on the bridge network with port
+# mapping instead of host networking.
+#
+# Usage:
+#   cd docker
+#   docker compose -f docker-compose.desktop.yml up -d
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - lcars_network
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./volumes/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    environment:
+      - TZ=${TIMEZONE:-America/New_York}
+    depends_on:
+      - whisper
+      - piper
+      - openwakeword
+
+  whisper:
+    container_name: whisper
+    image: lscr.io/linuxserver/faster-whisper:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "10300:10300"
+    volumes:
+      - ./volumes/whisper:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TIMEZONE:-America/New_York}
+      - WHISPER_MODEL=medium-int8
+      - WHISPER_LANG=en
+      - WHISPER_BEAM_SIZE=5
+
+  piper:
+    container_name: piper
+    image: lscr.io/linuxserver/piper:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "10200:10200"
+    volumes:
+      - ./volumes/piper:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TIMEZONE:-America/New_York}
+      - PIPER_VOICE=en_US-amy-medium
+      - PIPER_SPEAKER=0
+      - PIPER_LENGTH_SCALE=1.0
+      - PIPER_NOISE_SCALE=0.667
+      - PIPER_NOISE_W=0.8
+
+  openwakeword:
+    container_name: openwakeword
+    image: rhasspy/wyoming-openwakeword:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "10400:10400"
+    command: >
+      --preload-model ${OPENWAKEWORD_PRELOAD_MODEL:-ok_nabu}
+      --custom-model-dir /custom
+      --threshold 0.5
+      --trigger-level 1
+    volumes:
+      - ./volumes/openwakeword:/custom
+
+  n8n:
+    container_name: n8n
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./volumes/n8n:/home/node/.n8n
+      - ./volumes/n8n_files:/files
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/New_York}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${DB_POSTGRESDB_HOST:-postgres}
+      - DB_POSTGRESDB_PORT=${DB_POSTGRESDB_PORT:-5432}
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env (run scripts/setup.py --generate-env)}
+      - HA_URL=${HA_URL:-http://host.docker.internal:8123}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in docker/.env (run scripts/setup.py --generate-env)}
+      - N8N_AI_ENABLED=true
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_RUNNERS_MODE=internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+      - redis
+
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./volumes/ollama:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=2
+
+  open-webui:
+    container_name: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./volumes/open-webui:/app/backend/data
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?Set WEBUI_SECRET_KEY in docker/.env (run scripts/setup.py --generate-env)}
+      - ENABLE_OLLAMA_API=true
+      - ENABLE_RAG_WEB_SEARCH=false
+      - RAG_EMBEDDING_MODEL=nomic-embed-text
+      - DEFAULT_MODELS=llama3.1:8b
+    depends_on:
+      - ollama
+
+  postgres:
+    container_name: postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=n8n
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env (run scripts/setup.py --generate-env)}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    volumes:
+      - ./volumes/redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  lcars_network:
+    driver: bridge
+    name: lcars_network

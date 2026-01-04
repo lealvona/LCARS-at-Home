@@ -1,0 +1,283 @@
+# LCARS Computer - Star Trek Home Automation Stack
+# Complete Docker Compose deployment
+# 
+# This file orchestrates all services needed for a fully local,
+# privacy-first voice assistant with LLM capabilities.
+#
+# Services:
+#   - Home Assistant (state management, device control)
+#   - n8n (workflow orchestration, AI agent logic)
+#   - Open WebUI (LLM interface, RAG, persona management)
+#   - Ollama (local LLM inference)
+#   - Whisper (speech-to-text)
+#   - Piper (text-to-speech)
+#   - openWakeWord (wake word detection)
+#   - PostgreSQL (persistent storage for n8n)
+#   - Redis (task queue, caching)
+
+services:
+  # ==========================================================================
+  # HOME ASSISTANT - The "Body" / State Machine
+  # ==========================================================================
+  # Home Assistant maintains the ground truth of all smart devices.
+  # It handles the Wyoming protocol for voice satellites and
+  # routes conversation to the LLM via Extended OpenAI Conversation.
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    privileged: true
+    network_mode: host  # Required for device discovery (Zigbee, mDNS, etc.)
+    volumes:
+      - ./volumes/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro  # For Bluetooth support
+    environment:
+      - TZ=${TIMEZONE:-America/New_York}
+    depends_on:
+      - whisper
+      - piper
+      - openwakeword
+
+  # ==========================================================================
+  # WYOMING PROTOCOL SERVICES - Voice Pipeline Components
+  # ==========================================================================
+  
+  # Whisper - Speech-to-Text (STT)
+  # Using faster-whisper for GPU acceleration and reduced latency.
+  # The 'medium' model balances accuracy and speed for voice commands.
+  whisper:
+    container_name: whisper
+    image: lscr.io/linuxserver/faster-whisper:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "10300:10300"
+    volumes:
+      - ./volumes/whisper:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TIMEZONE:-America/New_York}
+      - WHISPER_MODEL=medium-int8  # Options: tiny, base, small, medium, large-v3
+      - WHISPER_LANG=en
+      - WHISPER_BEAM_SIZE=5
+    # Uncomment below for NVIDIA GPU acceleration (critical for low latency)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Piper - Text-to-Speech (TTS)
+  # Piper runs entirely offline and produces high-quality speech.
+  # The 'amy' voice provides a calm, authoritative tone similar to LCARS.
+  piper:
+    container_name: piper
+    image: lscr.io/linuxserver/piper:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "10200:10200"
+    volumes:
+      - ./volumes/piper:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=${TIMEZONE:-America/New_York}
+      - PIPER_VOICE=en_US-amy-medium  # Calm, authoritative female voice
+      - PIPER_SPEAKER=0
+      - PIPER_LENGTH_SCALE=1.0
+      - PIPER_NOISE_SCALE=0.667
+      - PIPER_NOISE_W=0.8
+
+  # openWakeWord - Wake Word Detection
+  # Listens for "Computer" to trigger the voice pipeline.
+  # Runs on the server to offload processing from satellites.
+  openwakeword:
+    container_name: openwakeword
+    image: rhasspy/wyoming-openwakeword:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "10400:10400"
+    command: >
+      --preload-model ${OPENWAKEWORD_PRELOAD_MODEL:-ok_nabu}
+      --custom-model-dir /custom
+      --threshold 0.5
+      --trigger-level 1
+    volumes:
+      - ./volumes/openwakeword:/custom
+
+  # ==========================================================================
+  # N8N - The "Nervous System" / Orchestration Engine
+  # ==========================================================================
+  # n8n handles the complex workflow logic, connecting the LLM to Home Assistant.
+  # It implements the "Fire-and-Forget" pattern for async tasks and
+  # provides visual debugging of automation flows.
+  n8n:
+    container_name: n8n
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./volumes/n8n:/home/node/.n8n
+      - ./volumes/n8n_files:/files  # For local file operations
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${TIMEZONE:-America/New_York}
+      - TZ=${TIMEZONE:-America/New_York}
+      # Database connection (using PostgreSQL for reliability)
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${DB_POSTGRESDB_HOST:-postgres}
+      - DB_POSTGRESDB_PORT=${DB_POSTGRESDB_PORT:-5432}
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env (run scripts/setup.py --generate-env)}
+      # Home Assistant base URL used by workflows (not a secret)
+      - HA_URL=${HA_URL:-http://host.docker.internal:8123}
+      # Security settings
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in docker/.env (run scripts/setup.py --generate-env)}
+      # AI features
+      - N8N_AI_ENABLED=true
+      # Python task runner for advanced scripts
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_RUNNERS_MODE=internal
+    extra_hosts:
+      # Needed on Linux so containers can reach host-networked Home Assistant
+      # (On Windows/macOS, host.docker.internal is provided automatically.)
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+      - redis
+
+  # ==========================================================================
+  # OPEN WEBUI + OLLAMA - The "Mind" / Cognitive Engine
+  # ==========================================================================
+  
+  # Ollama - Local LLM Inference Server
+  # Runs open-source models like Llama 3.1, Mistral, etc.
+  # GPU acceleration is critical for sub-second response times.
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./volumes/ollama:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h  # Keep model loaded for faster responses
+      - OLLAMA_NUM_PARALLEL=2  # Handle multiple requests
+    # NVIDIA GPU configuration - uncomment if you have an NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Open WebUI - LLM Interface and RAG System
+  # Provides the cognitive interface, persona management, and
+  # Retrieval-Augmented Generation for the "Ship's Database".
+  open-webui:
+    container_name: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./volumes/open-webui:/app/backend/data
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?Set WEBUI_SECRET_KEY in docker/.env (run scripts/setup.py --generate-env)}
+      - ENABLE_OLLAMA_API=true
+      - ENABLE_RAG_WEB_SEARCH=false  # Enable if you want web search
+      - RAG_EMBEDDING_MODEL=nomic-embed-text  # For document embeddings
+      - DEFAULT_MODELS=llama3.1:8b
+    depends_on:
+      - ollama
+
+  # ==========================================================================
+  # SUPPORTING SERVICES - Databases and Caching
+  # ==========================================================================
+  
+  # PostgreSQL - Persistent Storage
+  # Used by n8n for workflow storage and execution history.
+  # Provides reliability and ACID compliance for automation data.
+  postgres:
+    container_name: postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    volumes:
+      - ./volumes/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=n8n
+      - POSTGRES_USER=n8n
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in docker/.env (run scripts/setup.py --generate-env)}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Task Queue and Caching
+  # Used for async task management and session caching.
+  # Essential for the "Fire-and-Forget" pattern.
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - lcars_network
+    volumes:
+      - ./volumes/redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ==========================================================================
+# NETWORK CONFIGURATION
+# ==========================================================================
+# All services (except Home Assistant) communicate over this internal network.
+# Home Assistant uses host networking for device discovery.
+networks:
+  lcars_network:
+    driver: bridge
+    name: lcars_network
+
+# ==========================================================================
+# VOLUME DEFINITIONS
+# ==========================================================================
+# Named volumes for persistent data across container restarts.
+volumes:
+  homeassistant_data:
+  n8n_data:
+  ollama_data:
+  open_webui_data:
+  postgres_data:
+  redis_data:
+  whisper_data:
+  piper_data:
