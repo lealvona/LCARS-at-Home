@@ -342,13 +342,12 @@
         - workflow
         - query
   function:
-    type: rest_command
-    rest_command: n8n_async_task
-    data:
-      task: "{{ workflow }}"
-      parameters:
-        query: "{{ query }}"
-      callback_entity: "tts.piper"
+    type: script
+    sequence:
+      - service: rest_command.n8n_webhook
+        data:
+          workflow: "{{ workflow }}"
+          query: "{{ query }}"
 
 # --- END SPEC CONFIGURATION ---
 
