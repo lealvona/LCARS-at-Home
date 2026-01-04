@@ -101,6 +101,25 @@ The LCARS Computer follows a **Separation of Concerns** pattern where each compo
 
 ## Quick Start
 
+### Run the interactive installer (Streamlit)
+
+This repo includes an interactive installation guide UI: `lcars_guide.py`.
+
+If you're using the included virtual environment in `env/`:
+
+```bash
+cd /home/lvona/src/lcars-computer
+source env/bin/activate
+streamlit run lcars_guide.py
+```
+
+Or, if you prefer system Python/your own venv:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m streamlit run lcars_guide.py
+```
+
 ### Platform support
 
 - Primary target: **Linux Mint Xia** (Ubuntu-based) using Docker Engine + Compose plugin.
