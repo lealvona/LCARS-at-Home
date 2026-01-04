@@ -44,63 +44,63 @@ except ImportError:
 SERVICES = {
     "homeassistant": {
         "url": "http://localhost:8123/api/",
-        "container": "homeassistant",
+        "container": "LCARS-homeassistant",
         "port": 8123,
         "critical": True,
         "description": "Home Assistant - State Machine & Device Control"
     },
     "n8n": {
         "url": "http://localhost:5678/healthz",
-        "container": "n8n",
+        "container": "LCARS-n8n",
         "port": 5678,
         "critical": True,
         "description": "n8n - Workflow Orchestration Engine"
     },
     "open-webui": {
         "url": "http://localhost:3000/health",
-        "container": "open-webui",
+        "container": "LCARS-open-webui",
         "port": 3000,
         "critical": True,
         "description": "Open WebUI - LLM Interface & RAG System"
     },
     "ollama": {
         "url": "http://localhost:11434/api/tags",
-        "container": "ollama",
+        "container": "LCARS-ollama",
         "port": 11434,
         "critical": True,
         "description": "Ollama - Local LLM Inference Server"
     },
     "whisper": {
         "url": "http://localhost:10300/",
-        "container": "whisper",
+        "container": "LCARS-whisper",
         "port": 10300,
         "critical": False,
         "description": "Whisper - Speech-to-Text (Wyoming)"
     },
     "piper": {
         "url": "http://localhost:10200/",
-        "container": "piper",
+        "container": "LCARS-piper",
         "port": 10200,
         "critical": False,
         "description": "Piper - Text-to-Speech (Wyoming)"
     },
     "openwakeword": {
         "url": None,  # No HTTP endpoint, check port only
-        "container": "openwakeword",
+        "container": "LCARS-openwakeword",
         "port": 10400,
         "critical": False,
         "description": "openWakeWord - Wake Word Detection"
     },
     "postgres": {
         "url": None,
-        "container": "postgres",
+        "container": "LCARS-postgres",
         "port": 5432,
         "critical": True,
         "description": "PostgreSQL - Workflow Database"
     },
     "redis": {
         "url": None,
-        "container": "redis",
+        "container": "LCARS-redis",
         "port": 6379,
         "critical": False,
         "description": "Redis - Task Queue & Caching"
@@ -530,7 +530,7 @@ def print_status_report(status: SystemStatus):
         for model in status.llm_models:
             print(f"  • {model['name']} ({model['size_gb']}GB)")
     else:
-        print(f"  {c.YELLOW}No models found. Pull a model with: docker exec ollama ollama pull llama3.1:8b{c.END}")
+        print(f"  {c.YELLOW}No models found. Pull a model with: docker exec LCARS-ollama ollama pull llama3.1:8b{c.END}")
     
     print(f"\n{c.BOLD}{'='*60}{c.END}\n")
 

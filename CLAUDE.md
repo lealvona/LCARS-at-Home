@@ -80,20 +80,20 @@ python3 scripts/backup.py
 
 ```bash
 # Pull a model
-docker exec ollama ollama pull llama3.1:8b
+docker exec LCARS-ollama ollama pull llama3.1:8b
 
 # List installed models
-docker exec ollama ollama list
+docker exec LCARS-ollama ollama list
 
 # Remove a model
-docker exec ollama ollama rm model_name
+docker exec LCARS-ollama ollama rm model_name
 ```
 
 ### Home Assistant
 
 ```bash
 # Check configuration validity
-docker exec homeassistant hass --script check_config
+docker exec LCARS-homeassistant hass --script check_config
 
 # Restart Home Assistant
 docker compose restart homeassistant

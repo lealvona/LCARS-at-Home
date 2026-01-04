@@ -139,8 +139,15 @@ create_backup() {
 # Get the currently running image digest for a container. This allows us to
 # detect whether a new image is actually different from what's running.
 get_current_digest() {
-    local container="$1"
-    docker inspect --format='{{.Image}}' "$container" 2>/dev/null || echo "none"
+    local container_id="$1"
+    docker inspect --format='{{.Image}}' "$container_id" 2>/dev/null || echo "none"
+}
+
+# Resolve a compose service name to a container ID.
+get_service_container_id() {
+    local service="$1"
+    cd "$DOCKER_DIR"
+    docker compose ps -q "$service" 2>/dev/null | head -n 1
 }
 
 # Check for available updates by comparing the currently running image digest
@@ -174,7 +181,11 @@ check_for_updates() {
         # Pull the image to check for updates (this downloads the manifest first)
         if docker pull "$image" --quiet &> /dev/null; then
             # Compare digests to determine if there's an actual update
-            local running_digest=$(get_current_digest "$service" 2>/dev/null || echo "none")
+            local container_id=$(get_service_container_id "$service")
+            local running_digest="none"
+            if [[ -n "$container_id" ]]; then
+                running_digest=$(get_current_digest "$container_id" 2>/dev/null || echo "none")
+            fi
             local latest_digest=$(docker inspect --format='{{.Id}}' "$image" 2>/dev/null || echo "unknown")
             
             if [[ "$running_digest" != "$latest_digest" ]]; then
@@ -311,7 +322,11 @@ verify_health() {
         fi
         
         for service in $services; do
-            local status=$(docker inspect --format='{{.State.Status}}' "$service" 2>/dev/null || echo "not_found")
+            local container_id=$(get_service_container_id "$service")
+            local status="not_found"
+            if [[ -n "$container_id" ]]; then
+                status=$(docker inspect --format='{{.State.Status}}' "$container_id" 2>/dev/null || echo "not_found")
+            fi
             
             if [[ "$status" != "running" ]]; then
                 all_healthy=false

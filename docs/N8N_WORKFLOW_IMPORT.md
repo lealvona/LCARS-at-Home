@@ -279,11 +279,11 @@ Most workflows work out-of-the-box, but you may need to configure:
    ```
 2. Check n8n can reach it:
    ```bash
-   docker exec n8n ping -c 1 host.docker.internal
+   docker exec LCARS-n8n ping -c 1 host.docker.internal
    ```
 3. Verify `HA_ACCESS_TOKEN` environment variable is set:
    ```bash
-   docker exec n8n env | grep HA_ACCESS_TOKEN
+   docker exec LCARS-n8n env | grep HA_ACCESS_TOKEN
    ```
 
 ---

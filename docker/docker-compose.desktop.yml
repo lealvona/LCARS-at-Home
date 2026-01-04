@@ -10,7 +10,7 @@
 
 services:
   homeassistant:
-    container_name: homeassistant
+    container_name: LCARS-homeassistant
     image: ghcr.io/home-assistant/home-assistant:stable
     restart: unless-stopped
     privileged: true
@@ -30,7 +30,7 @@ services:
       - openwakeword
 
   whisper:
-    container_name: whisper
+    container_name: LCARS-whisper
     image: lscr.io/linuxserver/faster-whisper:latest
     restart: unless-stopped
     networks:
@@ -48,7 +48,7 @@ services:
       - WHISPER_BEAM_SIZE=5
 
   piper:
-    container_name: piper
+    container_name: LCARS-piper
     image: lscr.io/linuxserver/piper:latest
     restart: unless-stopped
     networks:
@@ -68,7 +68,7 @@ services:
       - PIPER_NOISE_W=0.8
 
   openwakeword:
-    container_name: openwakeword
+    container_name: LCARS-openwakeword
     image: rhasspy/wyoming-openwakeword:latest
     restart: unless-stopped
     networks:
@@ -84,7 +84,7 @@ services:
       - ./volumes/openwakeword:/custom
 
   n8n:
-    container_name: n8n
+    container_name: LCARS-n8n
     image: docker.n8n.io/n8nio/n8n:latest
     restart: unless-stopped
     networks:
@@ -119,7 +119,7 @@ services:
       - redis
 
   ollama:
-    container_name: ollama
+    container_name: LCARS-ollama
     image: ollama/ollama:latest
     restart: unless-stopped
     networks:
@@ -134,7 +134,7 @@ services:
       - OLLAMA_NUM_PARALLEL=2
 
   open-webui:
-    container_name: open-webui
+    container_name: LCARS-open-webui
     image: ghcr.io/open-webui/open-webui:main
     restart: unless-stopped
     networks:
@@ -154,7 +154,7 @@ services:
       - ollama
 
   postgres:
-    container_name: postgres
+    container_name: LCARS-postgres
     image: postgres:16-alpine
     restart: unless-stopped
     networks:
@@ -172,7 +172,7 @@ services:
       retries: 5
 
   redis:
-    container_name: redis
+    container_name: LCARS-redis
     image: redis:7-alpine
     restart: unless-stopped
     networks:
