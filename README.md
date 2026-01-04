@@ -3,7 +3,7 @@
 
 This repository is **work-in-progress software**. It is under active development and may be incomplete, unstable, insecure by default, or change without notice.
 
-**Hard-head required** — expect breakage, rough edges, and configuration churn.
+**Hard-hat required** — expect breakage, rough edges, and configuration churn.
 
 Before you use it (recommended)
 
