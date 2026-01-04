@@ -1,3 +1,21 @@
+***
+## ⚠️ WORK IN PROGRESS / USE AT YOUR OWN RISK
+
+This repository is **work-in-progress software**. It is under active development and may be incomplete, unstable, insecure by default, or change without notice.
+
+**Hard-head required** — expect breakage, rough edges, and configuration churn.
+
+Before you use it (recommended)
+
+- Treat this as an **experimental/home-lab project**, not production infrastructure.
+- Assume updates may **break compatibility** with existing configs/workflows.
+- **Back up** any Home Assistant / n8n / database data you care about before upgrades.
+- Review what you expose to the LLM (tools/entities) and avoid exposing sensitive systems.
+
+No warranty is provided; you are responsible for how you deploy and operate it.
+
+***
+
 # LCARS Computer: Star Trek Voice Assistant for Home Automation
 
 A complete, self-hosted, privacy-first voice assistant that transforms your home into the USS Enterprise. This system integrates **Home Assistant** (the "body"), **Open WebUI with Ollama** (the "mind"), and **n8n** (the "nervous system") to create a voice-controlled environment that responds to natural language commands.
@@ -436,3 +454,12 @@ This project is open source under the MIT License.
 - The creators of Wyoming Protocol
 
 Live long and prosper.
+
+***
+
+## Footer — Work-in-Progress Notice
+
+- **Status:** experimental / actively changing.
+- **Risk:** use at your own risk (including data loss, downtime, or misconfiguration).
+- **Warranty:** no guarantees or liability; you operate and secure your environment.
+
